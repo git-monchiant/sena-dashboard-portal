@@ -43,9 +43,43 @@ export const statusConfig: Record<
 };
 
 // Request Type / Category
-export type RequestCategory = 'repair' | 'complaint' | 'inspection' | 'preventive';
+export type RequestCategory =
+  | 'electrical'
+  | 'plumbing'
+  | 'structure'
+  | 'architecture'
+  | 'aircon'
+  | 'elevator'
+  | 'security'
+  | 'fire_system'
+  | 'it_comm'
+  | 'common_area'
+  | 'sanitation'
+  | 'landscape'
+  | 'general_complaint'
+  | 'other';
 
 export const categoryConfig: Record<RequestCategory, { label: string; color: string }> = {
+  electrical: { label: 'ไฟฟ้า', color: 'yellow' },
+  plumbing: { label: 'ประปา', color: 'blue' },
+  structure: { label: 'โครงสร้าง', color: 'slate' },
+  architecture: { label: 'สถาปัตยกรรม', color: 'stone' },
+  aircon: { label: 'ระบบปรับอากาศ', color: 'cyan' },
+  elevator: { label: 'ลิฟต์และบันไดเลื่อน', color: 'purple' },
+  security: { label: 'ระบบรักษาความปลอดภัย', color: 'indigo' },
+  fire_system: { label: 'ระบบดับเพลิง', color: 'red' },
+  it_comm: { label: 'ระบบสื่อสารและ IT', color: 'teal' },
+  common_area: { label: 'พื้นที่ส่วนกลาง', color: 'emerald' },
+  sanitation: { label: 'ความสะอาดและสุขาภิบาล', color: 'lime' },
+  landscape: { label: 'ภูมิทัศน์', color: 'green' },
+  general_complaint: { label: 'งานร้องเรียนทั่วไป', color: 'orange' },
+  other: { label: 'อื่น ๆ', color: 'gray' },
+};
+
+// Job Type (ประเภทงาน)
+export type JobType = 'repair' | 'complaint' | 'inspection' | 'preventive';
+
+export const jobTypeConfig: Record<JobType, { label: string; color: string }> = {
   repair: { label: 'งานซ่อม', color: 'blue' },
   complaint: { label: 'ข้อร้องเรียน', color: 'red' },
   inspection: { label: 'ตรวจสอบ', color: 'amber' },

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { PageHeader, KPICard } from '@shared/ui';
 import { MaintenanceFilters, MaintenanceFilterState } from './filters';
 import { fetchMaintenanceOverview, MaintenanceOverviewData, ProjectDefect } from './queries';
-import { responsibilityConfig, categoryConfig, ResponsibilityStats } from '../types';
+import { responsibilityConfig, jobTypeConfig, ResponsibilityStats } from '../types';
 import {
   Wrench,
   Clock,
@@ -35,6 +35,8 @@ import {
   Bar,
   Legend,
   LabelList,
+  LineChart,
+  Line,
 } from 'recharts';
 
 interface QuickLinkCardProps {
@@ -103,11 +105,11 @@ function ResponsibilityCard({ stat }: { stat: ResponsibilityStats }) {
       </div>
       <div className="flex gap-8 mb-4">
         <div>
-          <p className="text-3xl font-bold text-slate-800">{stat.totalJobs}</p>
+          <p className="text-3xl font-bold text-slate-800">{stat.totalJobs.toLocaleString()}</p>
           <p className="text-xs text-slate-500">งานทั้งหมด</p>
         </div>
         <div>
-          <p className={`text-3xl font-bold ${textColor}`}>{stat.openJobs}</p>
+          <p className={`text-3xl font-bold ${textColor}`}>{stat.openJobs.toLocaleString()}</p>
           <p className="text-xs text-slate-500">งานเปิดอยู่</p>
         </div>
       </div>
@@ -135,7 +137,7 @@ function ResponsibilityCard({ stat }: { stat: ResponsibilityStats }) {
   );
 }
 
-const categoryColors = {
+const jobTypeColors = {
   repair: '#3b82f6',
   complaint: '#ef4444',
   inspection: '#f59e0b',
@@ -172,14 +174,14 @@ function ProjectDefectRow({ project, isLast }: { project: ProjectDefect; isLast:
         </div>
       </td>
       <td className="py-3 px-4 text-center">
-        <span className="text-lg font-bold text-slate-800">{project.totalDefects}</span>
+        <span className="text-lg font-bold text-slate-800">{project.totalDefects.toLocaleString()}</span>
       </td>
       <td className="py-3 px-4 text-center">
-        <span className="text-lg font-bold text-amber-600">{project.openDefects}</span>
+        <span className="text-lg font-bold text-amber-600">{project.openDefects.toLocaleString()}</span>
       </td>
       <td className="py-3 px-4 text-center">
         <span className={`text-lg font-bold ${hasUrgent ? 'text-red-600' : 'text-slate-600'}`}>
-          {project.defectsOver14Days}
+          {project.defectsOver14Days.toLocaleString()}
         </span>
       </td>
       <td className="py-3 px-4 text-center">
@@ -209,10 +211,47 @@ function ProjectDefectRow({ project, isLast }: { project: ProjectDefect; isLast:
   );
 }
 
+type DefectViewMode = 'status' | 'category' | 'jobType';
+
+const categoryColors = {
+  electrical: '#eab308',
+  plumbing: '#3b82f6',
+  structure: '#64748b',
+  aircon: '#06b6d4',
+  elevator: '#a855f7',
+  commonArea: '#10b981',
+  other: '#9ca3af',
+};
+
+const categoryLabels = {
+  electrical: 'ไฟฟ้า',
+  plumbing: 'ประปา',
+  structure: 'โครงสร้าง',
+  aircon: 'ปรับอากาศ',
+  elevator: 'ลิฟต์',
+  commonArea: 'ส่วนกลาง',
+  other: 'อื่นๆ',
+};
+
+const jobTypeChartColors = {
+  repair: '#3b82f6',
+  complaint: '#ef4444',
+  inspection: '#f59e0b',
+  preventive: '#10b981',
+};
+
+const jobTypeChartLabels = {
+  repair: 'งานซ่อม',
+  complaint: 'ร้องเรียน',
+  inspection: 'ตรวจสอบ',
+  preventive: 'บำรุงรักษา',
+};
+
 export function MaintenanceOverviewPage() {
   const navigate = useNavigate();
   const [data, setData] = useState<MaintenanceOverviewData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [defectViewMode, setDefectViewMode] = useState<DefectViewMode>('status');
 
   const loadData = async (filters: MaintenanceFilterState) => {
     setIsLoading(true);
@@ -253,10 +292,10 @@ export function MaintenanceOverviewPage() {
     );
   }
 
-  const pieData = Object.entries(data.categoryDistribution).map(([key, value]) => ({
-    name: categoryConfig[key as keyof typeof categoryConfig].label,
+  const pieData = Object.entries(data.jobTypeDistribution).map(([key, value]) => ({
+    name: jobTypeConfig[key as keyof typeof jobTypeConfig].label,
     value,
-    color: categoryColors[key as keyof typeof categoryColors],
+    color: jobTypeColors[key as keyof typeof jobTypeColors],
     count: Math.round((data.kpis.totalJobs.value * value) / 100),
   }));
 
@@ -312,6 +351,7 @@ export function MaintenanceOverviewPage() {
             changeType={data.kpis.totalJobs.changeType}
             icon={Wrench}
             color="blue"
+            href="/maintenance/requests"
           />
           <KPICard
             title="งานเปิดอยู่"
@@ -320,6 +360,7 @@ export function MaintenanceOverviewPage() {
             changeType={data.kpis.openJobs.changeType}
             icon={Clock}
             color="amber"
+            href="/maintenance/requests?status=open"
           />
           <KPICard
             title="งานค้าง > 14 วัน"
@@ -328,6 +369,7 @@ export function MaintenanceOverviewPage() {
             changeType={data.kpis.jobsOver14Days?.changeType || 'neutral'}
             icon={AlertTriangle}
             color="red"
+            href="/maintenance/requests?overdue=true"
           />
           <KPICard
             title="เวลาเฉลี่ยปิดงาน"
@@ -344,6 +386,7 @@ export function MaintenanceOverviewPage() {
             changeType={data.kpis.completionRate?.changeType || 'neutral'}
             icon={CheckCircle}
             color="emerald"
+            href="/maintenance/requests?status=completed"
           />
         </div>
 
@@ -353,7 +396,7 @@ export function MaintenanceOverviewPage() {
           <div className="card">
             <div className="mb-4">
               <h3 className="font-semibold text-slate-800">สัดส่วนประเภทงาน</h3>
-              <p className="text-sm text-slate-500">แยกตามประเภทคำร้อง</p>
+              <p className="text-sm text-slate-500">งานซ่อม / ข้อร้องเรียน / ตรวจสอบ / บำรุงรักษา</p>
             </div>
             <ResponsiveContainer width="100%" height={260}>
               <PieChart>
@@ -389,28 +432,14 @@ export function MaintenanceOverviewPage() {
                 />
               </PieChart>
             </ResponsiveContainer>
-            <div className="grid grid-cols-2 gap-2 mt-4">
-              {pieData.map((item) => (
-                <div key={item.name} className="flex items-center gap-2">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: item.color }}
-                  />
-                  <span className="text-sm text-slate-600">{item.name}</span>
-                  <span className="text-sm font-medium text-slate-800 ml-auto">
-                    {item.value}%
-                  </span>
-                </div>
-              ))}
-            </div>
           </div>
 
           {/* Trend Chart */}
           <div className="card lg:col-span-2">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="font-semibold text-slate-800">แนวโน้มงาน</h3>
-                <p className="text-sm text-slate-500">เปรียบเทียบงานทั้งหมด vs เสร็จสิ้น</p>
+                <h3 className="font-semibold text-slate-800">เปรียบเทียบปริมาณงาน และการปิดงาน</h3>
+                <p className="text-sm text-slate-500">งานทั้งหมด / เสร็จสิ้น</p>
               </div>
             </div>
             <ResponsiveContainer width="100%" height={240}>
@@ -436,22 +465,24 @@ export function MaintenanceOverviewPage() {
                   }}
                 />
                 <Area
-                  type="monotone"
+                  type="linear"
                   dataKey="total"
                   stroke="#3b82f6"
                   strokeWidth={2}
                   fill="url(#totalGradient)"
                   name="งานทั้งหมด"
+                  dot={{ r: 2.5, fill: '#3b82f6' }}
                 >
                   <LabelList dataKey="total" position="top" fontSize={11} fill="#3b82f6" fontWeight={600} />
                 </Area>
                 <Area
-                  type="monotone"
+                  type="linear"
                   dataKey="completed"
                   stroke="#10b981"
                   strokeWidth={2}
                   fill="url(#completedGradient)"
                   name="เสร็จสิ้น"
+                  dot={{ r: 2.5, fill: '#10b981' }}
                 >
                   <LabelList dataKey="completed" position="bottom" fontSize={11} fill="#10b981" fontWeight={600} />
                 </Area>
@@ -470,6 +501,57 @@ export function MaintenanceOverviewPage() {
           </div>
         </div>
 
+        {/* Open Jobs by Category */}
+        <div className="card mb-8">
+          <div className="mb-4">
+            <h3 className="font-semibold text-slate-800">งานค้างตามประเภทงานซ่อม</h3>
+            <p className="text-sm text-slate-500">จำนวนงานเปิดอยู่แยกตามประเภทงาน</p>
+          </div>
+          <ResponsiveContainer width="100%" height={400}>
+            <BarChart
+              data={[...data.openJobsByCategory].sort((a, b) => b.openJobs - a.openJobs)}
+              layout="vertical"
+              margin={{ top: 5, right: 50, left: 10, bottom: 5 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis type="number" stroke="#64748b" fontSize={12} />
+              <YAxis
+                dataKey="label"
+                type="category"
+                stroke="#64748b"
+                fontSize={11}
+                width={150}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#fff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '8px',
+                }}
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  const item = payload[0].payload;
+                  return (
+                    <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                        <span className="text-sm font-medium text-slate-700">{item.label}</span>
+                      </div>
+                      <p className="text-sm text-slate-800 mt-1">{item.openJobs.toLocaleString()} งาน</p>
+                    </div>
+                  );
+                }}
+              />
+              <Bar dataKey="openJobs" radius={[0, 4, 4, 0]}>
+                {data.openJobsByCategory.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+                <LabelList dataKey="openJobs" position="right" fontSize={11} fill="#64748b" fontWeight={600} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
         {/* Defect by Project Section */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
@@ -477,9 +559,42 @@ export function MaintenanceOverviewPage() {
               <h3 className="text-lg font-semibold text-slate-800">Defect รายโครงการ</h3>
               <p className="text-sm text-slate-500">ติดตาม Defect และงานค้างแต่ละโครงการ ({data.projectDefects.length} โครงการ)</p>
             </div>
+            <div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1">
+              <button
+                onClick={() => setDefectViewMode('status')}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  defectViewMode === 'status'
+                    ? 'bg-white text-slate-800 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-800'
+                }`}
+              >
+                ตามสถานะ
+              </button>
+              <button
+                onClick={() => setDefectViewMode('category')}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  defectViewMode === 'category'
+                    ? 'bg-white text-slate-800 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-800'
+                }`}
+              >
+                ตามประเภทซ่อม
+              </button>
+              <button
+                onClick={() => setDefectViewMode('jobType')}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  defectViewMode === 'jobType'
+                    ? 'bg-white text-slate-800 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-800'
+                }`}
+              >
+                ตามประเภทงาน
+              </button>
+            </div>
           </div>
 
-          {/* Project Defect Chart - 100% Stacked */}
+          {/* Project Defect Chart - Status View */}
+          {defectViewMode === 'status' && (
           <div className="card mb-6">
             <h4 className="font-medium text-slate-700 mb-4">สัดส่วน Defect รายโครงการ (%)</h4>
             <ResponsiveContainer width="100%" height={550}>
@@ -555,7 +670,13 @@ export function MaintenanceOverviewPage() {
                     );
                   }}
                 />
-                <Legend />
+                <Legend
+                  payload={[
+                    { value: 'เสร็จแล้ว', type: 'square', color: '#22c55e' },
+                    { value: 'เปิดอยู่ < 14 วัน', type: 'square', color: '#f59e0b' },
+                    { value: 'ค้าง > 14 วัน', type: 'square', color: '#ef4444' },
+                  ]}
+                />
                 <Bar dataKey="completedPct" name="เสร็จแล้ว" stackId="a" fill="#22c55e" />
                 <Bar dataKey="openUnder14Pct" name="เปิดอยู่ < 14 วัน" stackId="a" fill="#f59e0b" />
                 <Bar dataKey="over14DaysPct" name="ค้าง > 14 วัน" stackId="a" fill="#ef4444" radius={[0, 4, 4, 0]}>
@@ -579,8 +700,237 @@ export function MaintenanceOverviewPage() {
               </BarChart>
             </ResponsiveContainer>
           </div>
+          )}
 
-          {/* Project Table */}
+          {/* Project Defect Chart - Category View (100% Stacked) */}
+          {defectViewMode === 'category' && (
+          <div className="card mb-6">
+            <h4 className="font-medium text-slate-700 mb-4">สัดส่วนงานเปิดตามประเภทงานซ่อม รายโครงการ (%)</h4>
+            <ResponsiveContainer width="100%" height={550}>
+              <BarChart
+                data={[...data.projectDefectsByCategory].sort((a, b) => b.total - a.total).map(p => {
+                  const total = p.total;
+                  return {
+                    name: p.projectName.replace('SENA ', ''),
+                    electricalPct: Math.round((p.electrical / total) * 100),
+                    plumbingPct: Math.round((p.plumbing / total) * 100),
+                    structurePct: Math.round((p.structure / total) * 100),
+                    airconPct: Math.round((p.aircon / total) * 100),
+                    elevatorPct: Math.round((p.elevator / total) * 100),
+                    commonAreaPct: Math.round((p.commonArea / total) * 100),
+                    otherPct: Math.max(0, 100 - Math.round((p.electrical / total) * 100) - Math.round((p.plumbing / total) * 100) - Math.round((p.structure / total) * 100) - Math.round((p.aircon / total) * 100) - Math.round((p.elevator / total) * 100) - Math.round((p.commonArea / total) * 100)),
+                    // Raw values for tooltip
+                    electrical: p.electrical,
+                    plumbing: p.plumbing,
+                    structure: p.structure,
+                    aircon: p.aircon,
+                    elevator: p.elevator,
+                    commonArea: p.commonArea,
+                    other: p.other,
+                    total: p.total,
+                  };
+                })}
+                layout="vertical"
+                margin={{ top: 5, right: 80, left: 10, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}%`} />
+                <YAxis
+                  dataKey="name"
+                  type="category"
+                  tick={{ fontSize: 11 }}
+                  width={180}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#fff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
+                  }}
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload?.length) return null;
+                    const d = payload[0]?.payload;
+                    return (
+                      <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-lg">
+                        <p className="font-medium text-slate-800 mb-2">{label}</p>
+                        <div className="space-y-1 text-sm">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded" style={{ backgroundColor: categoryColors.electrical }} />
+                            <span className="text-slate-600">{categoryLabels.electrical}:</span>
+                            <span className="font-medium">{d.electricalPct}% ({d.electrical} งาน)</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded" style={{ backgroundColor: categoryColors.plumbing }} />
+                            <span className="text-slate-600">{categoryLabels.plumbing}:</span>
+                            <span className="font-medium">{d.plumbingPct}% ({d.plumbing} งาน)</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded" style={{ backgroundColor: categoryColors.structure }} />
+                            <span className="text-slate-600">{categoryLabels.structure}:</span>
+                            <span className="font-medium">{d.structurePct}% ({d.structure} งาน)</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded" style={{ backgroundColor: categoryColors.aircon }} />
+                            <span className="text-slate-600">{categoryLabels.aircon}:</span>
+                            <span className="font-medium">{d.airconPct}% ({d.aircon} งาน)</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded" style={{ backgroundColor: categoryColors.elevator }} />
+                            <span className="text-slate-600">{categoryLabels.elevator}:</span>
+                            <span className="font-medium">{d.elevatorPct}% ({d.elevator} งาน)</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded" style={{ backgroundColor: categoryColors.commonArea }} />
+                            <span className="text-slate-600">{categoryLabels.commonArea}:</span>
+                            <span className="font-medium">{d.commonAreaPct}% ({d.commonArea} งาน)</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded" style={{ backgroundColor: categoryColors.other }} />
+                            <span className="text-slate-600">{categoryLabels.other}:</span>
+                            <span className="font-medium">{d.otherPct}% ({d.other} งาน)</span>
+                          </div>
+                          <div className="pt-2 mt-2 border-t border-slate-100">
+                            <span className="text-slate-500">รวม: </span>
+                            <span className="font-semibold text-slate-800">{d.total} งาน</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+                <Legend
+                  payload={[
+                    { value: categoryLabels.electrical, type: 'square', color: categoryColors.electrical },
+                    { value: categoryLabels.plumbing, type: 'square', color: categoryColors.plumbing },
+                    { value: categoryLabels.structure, type: 'square', color: categoryColors.structure },
+                    { value: categoryLabels.aircon, type: 'square', color: categoryColors.aircon },
+                    { value: categoryLabels.elevator, type: 'square', color: categoryColors.elevator },
+                    { value: categoryLabels.commonArea, type: 'square', color: categoryColors.commonArea },
+                    { value: categoryLabels.other, type: 'square', color: categoryColors.other },
+                  ]}
+                />
+                <Bar dataKey="electricalPct" name={categoryLabels.electrical} stackId="a" fill={categoryColors.electrical} />
+                <Bar dataKey="plumbingPct" name={categoryLabels.plumbing} stackId="a" fill={categoryColors.plumbing} />
+                <Bar dataKey="structurePct" name={categoryLabels.structure} stackId="a" fill={categoryColors.structure} />
+                <Bar dataKey="airconPct" name={categoryLabels.aircon} stackId="a" fill={categoryColors.aircon} />
+                <Bar dataKey="elevatorPct" name={categoryLabels.elevator} stackId="a" fill={categoryColors.elevator} />
+                <Bar dataKey="commonAreaPct" name={categoryLabels.commonArea} stackId="a" fill={categoryColors.commonArea} />
+                <Bar dataKey="otherPct" name={categoryLabels.other} stackId="a" fill={categoryColors.other} radius={[0, 4, 4, 0]}>
+                  <LabelList
+                    dataKey="total"
+                    position="right"
+                    fontSize={11}
+                    fill="#64748b"
+                    fontWeight={600}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          )}
+
+          {/* Project Defect Chart - JobType View (100% Stacked) */}
+          {defectViewMode === 'jobType' && (
+          <div className="card mb-6">
+            <h4 className="font-medium text-slate-700 mb-4">สัดส่วนงานเปิดตามประเภทงาน รายโครงการ (%)</h4>
+            <ResponsiveContainer width="100%" height={550}>
+              <BarChart
+                data={[...data.projectDefectsByJobType].sort((a, b) => b.total - a.total).map(p => {
+                  const total = p.total;
+                  return {
+                    name: p.projectName.replace('SENA ', ''),
+                    repairPct: Math.round((p.repair / total) * 100),
+                    complaintPct: Math.round((p.complaint / total) * 100),
+                    inspectionPct: Math.round((p.inspection / total) * 100),
+                    preventivePct: Math.max(0, 100 - Math.round((p.repair / total) * 100) - Math.round((p.complaint / total) * 100) - Math.round((p.inspection / total) * 100)),
+                    // Raw values for tooltip
+                    repair: p.repair,
+                    complaint: p.complaint,
+                    inspection: p.inspection,
+                    preventive: p.preventive,
+                    total: p.total,
+                  };
+                })}
+                layout="vertical"
+                margin={{ top: 5, right: 80, left: 10, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}%`} />
+                <YAxis
+                  dataKey="name"
+                  type="category"
+                  tick={{ fontSize: 11 }}
+                  width={180}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#fff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
+                  }}
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload?.length) return null;
+                    const d = payload[0]?.payload;
+                    return (
+                      <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-lg">
+                        <p className="font-medium text-slate-800 mb-2">{label}</p>
+                        <div className="space-y-1 text-sm">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded" style={{ backgroundColor: jobTypeChartColors.repair }} />
+                            <span className="text-slate-600">{jobTypeChartLabels.repair}:</span>
+                            <span className="font-medium">{d.repairPct}% ({d.repair} งาน)</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded" style={{ backgroundColor: jobTypeChartColors.complaint }} />
+                            <span className="text-slate-600">{jobTypeChartLabels.complaint}:</span>
+                            <span className="font-medium">{d.complaintPct}% ({d.complaint} งาน)</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded" style={{ backgroundColor: jobTypeChartColors.inspection }} />
+                            <span className="text-slate-600">{jobTypeChartLabels.inspection}:</span>
+                            <span className="font-medium">{d.inspectionPct}% ({d.inspection} งาน)</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded" style={{ backgroundColor: jobTypeChartColors.preventive }} />
+                            <span className="text-slate-600">{jobTypeChartLabels.preventive}:</span>
+                            <span className="font-medium">{d.preventivePct}% ({d.preventive} งาน)</span>
+                          </div>
+                          <div className="pt-2 mt-2 border-t border-slate-100">
+                            <span className="text-slate-500">รวม: </span>
+                            <span className="font-semibold text-slate-800">{d.total} งาน</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+                <Legend
+                  payload={[
+                    { value: jobTypeChartLabels.repair, type: 'square', color: jobTypeChartColors.repair },
+                    { value: jobTypeChartLabels.complaint, type: 'square', color: jobTypeChartColors.complaint },
+                    { value: jobTypeChartLabels.inspection, type: 'square', color: jobTypeChartColors.inspection },
+                    { value: jobTypeChartLabels.preventive, type: 'square', color: jobTypeChartColors.preventive },
+                  ]}
+                />
+                <Bar dataKey="repairPct" name={jobTypeChartLabels.repair} stackId="a" fill={jobTypeChartColors.repair} />
+                <Bar dataKey="complaintPct" name={jobTypeChartLabels.complaint} stackId="a" fill={jobTypeChartColors.complaint} />
+                <Bar dataKey="inspectionPct" name={jobTypeChartLabels.inspection} stackId="a" fill={jobTypeChartColors.inspection} />
+                <Bar dataKey="preventivePct" name={jobTypeChartLabels.preventive} stackId="a" fill={jobTypeChartColors.preventive} radius={[0, 4, 4, 0]}>
+                  <LabelList
+                    dataKey="total"
+                    position="right"
+                    fontSize={11}
+                    fill="#64748b"
+                    fontWeight={600}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          )}
+
+          {/* Project Table - Status View */}
+          {defectViewMode === 'status' && (
           <div className="card overflow-hidden">
             <div className="max-h-[500px] overflow-y-auto">
             <table className="min-w-full">
@@ -603,6 +953,7 @@ export function MaintenanceOverviewPage() {
             </table>
             </div>
           </div>
+          )}
         </div>
 
         {/* Quick Links */}

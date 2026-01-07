@@ -32,20 +32,28 @@ interface QuickLinkCardProps {
   description: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
+  count?: number;
 }
 
-function QuickLinkCard({ title, description, href, icon: Icon }: QuickLinkCardProps) {
+function QuickLinkCard({ title, description, href, icon: Icon, count }: QuickLinkCardProps) {
   const navigate = useNavigate();
   return (
     <button
       onClick={() => navigate(href)}
       className="card-hover flex items-center gap-4 text-left w-full group"
     >
-      <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center group-hover:bg-slate-200 transition-colors">
-        <Icon className="w-5 h-5 text-slate-600" />
+      <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center group-hover:bg-slate-200 transition-colors">
+        <Icon className="w-6 h-6 text-slate-600" />
       </div>
       <div className="flex-1">
-        <h4 className="font-medium text-slate-800">{title}</h4>
+        <div className="flex items-center gap-2">
+          <h4 className="font-medium text-slate-800">{title}</h4>
+          {count !== undefined && (
+            <span className="px-2 py-0.5 text-xs font-medium bg-primary-100 text-primary-700 rounded-full">
+              {count}
+            </span>
+          )}
+        </div>
         <p className="text-sm text-slate-500">{description}</p>
       </div>
       <ArrowRight className="w-5 h-5 text-slate-400 group-hover:text-slate-600 transition-colors" />
@@ -179,21 +187,23 @@ export function SalesOverviewPage() {
                   }}
                 />
                 <Area
-                  type="monotone"
+                  type="linear"
                   dataKey="sales"
                   stroke="#10b981"
                   strokeWidth={2}
                   fill="url(#salesGradient)"
+                  dot={{ r: 2.5, fill: '#10b981' }}
                 >
                   <LabelList dataKey="sales" position="top" fontSize={11} fill="#10b981" fontWeight={600} />
                 </Area>
                 <Area
-                  type="monotone"
+                  type="linear"
                   dataKey="target"
                   stroke="#94a3b8"
                   strokeWidth={2}
                   strokeDasharray="5 5"
                   fill="none"
+                  dot={{ r: 2.5, fill: '#94a3b8' }}
                 >
                   <LabelList dataKey="target" position="bottom" fontSize={11} fill="#94a3b8" fontWeight={600} />
                 </Area>
@@ -278,20 +288,6 @@ export function SalesOverviewPage() {
                 />
               </PieChart>
             </ResponsiveContainer>
-            <div className="grid grid-cols-2 gap-2 mt-4">
-              {data.channelData.map((item) => (
-                <div key={item.name} className="flex items-center gap-2">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: item.color }}
-                  />
-                  <span className="text-sm text-slate-600">{item.name}</span>
-                  <span className="text-sm font-medium text-slate-800 ml-auto">
-                    {item.value}%
-                  </span>
-                </div>
-              ))}
-            </div>
           </div>
 
           {/* Quick Links */}

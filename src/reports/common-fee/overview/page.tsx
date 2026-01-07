@@ -263,20 +263,6 @@ export function CommonFeeOverviewPage() {
                 />
               </PieChart>
             </ResponsiveContainer>
-            <div className="grid grid-cols-2 gap-2 mt-4">
-              {pieData.map((item) => (
-                <div key={item.name} className="flex items-center gap-2">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: item.color }}
-                  />
-                  <span className="text-sm text-slate-600">{item.name}</span>
-                  <span className="text-sm font-medium text-slate-800 ml-auto">
-                    {item.value}%
-                  </span>
-                </div>
-              ))}
-            </div>
           </div>
 
           {/* Trend Chart */}
@@ -316,22 +302,24 @@ export function CommonFeeOverviewPage() {
                   formatter={(value: number) => [`฿${value.toLocaleString()}K`, '']}
                 />
                 <Area
-                  type="monotone"
+                  type="linear"
                   dataKey="billed"
                   stroke="#3b82f6"
                   strokeWidth={2}
                   fill="url(#billedGradient)"
                   name="เรียกเก็บ"
+                  dot={{ r: 2.5, fill: '#3b82f6' }}
                 >
                   <LabelList dataKey="billed" position="top" fontSize={11} fill="#3b82f6" fontWeight={600} />
                 </Area>
                 <Area
-                  type="monotone"
+                  type="linear"
                   dataKey="paid"
                   stroke="#10b981"
                   strokeWidth={2}
                   fill="url(#paidGradient)"
                   name="ชำระแล้ว"
+                  dot={{ r: 2.5, fill: '#10b981' }}
                 >
                   <LabelList dataKey="paid" position="bottom" fontSize={11} fill="#10b981" fontWeight={600} />
                 </Area>

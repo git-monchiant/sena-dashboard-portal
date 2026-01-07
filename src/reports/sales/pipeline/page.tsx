@@ -55,8 +55,8 @@ function StageCard({ stage, count, value, percentage, color, isLast }: StageCard
         style={{ borderTopColor: color, borderTopWidth: '3px' }}
       >
         <p className="text-sm text-slate-500 mb-1">{stage}</p>
-        <p className="text-2xl font-bold text-slate-800">{count}</p>
-        <p className="text-xs text-slate-400 mt-1">฿{value}M</p>
+        <p className="text-2xl font-bold text-slate-800">{count.toLocaleString()}</p>
+        <p className="text-xs text-slate-400 mt-1">฿{value.toLocaleString()}M</p>
         <div className="mt-3 flex items-center justify-center gap-1">
           <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
             {percentage}%

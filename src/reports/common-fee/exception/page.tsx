@@ -354,7 +354,7 @@ export function ExceptionPage() {
               : 'bg-white border-slate-200 hover:bg-slate-50'
           }`}
         >
-          <div className="text-2xl font-bold text-slate-800">{stats.total}</div>
+          <div className="text-2xl font-bold text-slate-800">{stats.total.toLocaleString()}</div>
           <div className="text-sm text-slate-500">ทั้งหมด</div>
         </button>
         <button
@@ -367,7 +367,7 @@ export function ExceptionPage() {
         >
           <div className="flex items-center justify-center gap-2">
             <FileText className="w-5 h-5 text-blue-600" />
-            <span className="text-2xl font-bold text-blue-600">{stats.open}</span>
+            <span className="text-2xl font-bold text-blue-600">{stats.open.toLocaleString()}</span>
           </div>
           <div className="text-sm text-blue-600">เปิดเคส</div>
         </button>
@@ -381,7 +381,7 @@ export function ExceptionPage() {
         >
           <div className="flex items-center justify-center gap-2">
             <Clock className="w-5 h-5 text-yellow-600" />
-            <span className="text-2xl font-bold text-yellow-600">{stats.inProgress}</span>
+            <span className="text-2xl font-bold text-yellow-600">{stats.inProgress.toLocaleString()}</span>
           </div>
           <div className="text-sm text-yellow-600">กำลังดำเนินการ</div>
         </button>
@@ -395,7 +395,7 @@ export function ExceptionPage() {
         >
           <div className="flex items-center justify-center gap-2">
             <Clock className="w-5 h-5 text-slate-600" />
-            <span className="text-2xl font-bold text-slate-600">{stats.pending}</span>
+            <span className="text-2xl font-bold text-slate-600">{stats.pending.toLocaleString()}</span>
           </div>
           <div className="text-sm text-slate-600">รอดำเนินการ</div>
         </button>
@@ -409,7 +409,7 @@ export function ExceptionPage() {
         >
           <div className="flex items-center justify-center gap-2">
             <CheckCircle className="w-5 h-5 text-green-600" />
-            <span className="text-2xl font-bold text-green-600">{stats.resolved}</span>
+            <span className="text-2xl font-bold text-green-600">{stats.resolved.toLocaleString()}</span>
           </div>
           <div className="text-sm text-green-600">แก้ไขแล้ว</div>
         </button>
@@ -423,7 +423,7 @@ export function ExceptionPage() {
         >
           <div className="flex items-center justify-center gap-2">
             <XCircle className="w-5 h-5 text-red-600" />
-            <span className="text-2xl font-bold text-red-600">{stats.closed}</span>
+            <span className="text-2xl font-bold text-red-600">{stats.closed.toLocaleString()}</span>
           </div>
           <div className="text-sm text-red-600">ปิดเคส</div>
         </button>

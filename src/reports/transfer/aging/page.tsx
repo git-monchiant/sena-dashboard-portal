@@ -19,6 +19,7 @@ import {
   ResponsiveContainer,
   LineChart,
   Line,
+  LabelList,
 } from 'recharts';
 
 const agingByProject = [
@@ -80,8 +81,8 @@ function AgingCard({ range, count, value, color, status }: AgingCardProps) {
         <p className="text-sm font-medium text-slate-700">{range}</p>
         <Icon className={`w-5 h-5 ${config.textColor}`} />
       </div>
-      <p className="text-3xl font-bold text-slate-800">{count}</p>
-      <p className="text-sm text-slate-500 mt-1">฿ {value}M</p>
+      <p className="text-3xl font-bold text-slate-800">{count.toLocaleString()}</p>
+      <p className="text-sm text-slate-500 mt-1">฿ {value.toLocaleString()}M</p>
       <div className={`text-xs font-medium mt-2 ${config.textColor}`}>{status}</div>
     </div>
   );
@@ -194,15 +195,17 @@ export function TransferAgingPage() {
                   }}
                 />
                 <Line
-                  type="monotone"
+                  type="linear"
                   dataKey="avg"
                   stroke="#3b82f6"
                   strokeWidth={2}
-                  dot={{ fill: '#3b82f6', strokeWidth: 2 }}
+                  dot={{ r: 2.5, fill: '#3b82f6' }}
                   name="Avg Days"
-                />
+                >
+                  <LabelList dataKey="avg" position="top" fontSize={11} fill="#3b82f6" fontWeight={600} />
+                </Line>
                 <Line
-                  type="monotone"
+                  type="linear"
                   dataKey="target"
                   stroke="#ef4444"
                   strokeWidth={2}

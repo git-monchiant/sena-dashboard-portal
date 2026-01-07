@@ -1,4 +1,5 @@
 import { TrendingUp, TrendingDown, LucideIcon } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 type ColorVariant = 'emerald' | 'blue' | 'purple' | 'orange' | 'amber' | 'red';
 
@@ -13,6 +14,8 @@ interface KPICardProps {
   subtext?: string;
   icon: LucideIcon;
   color: ColorVariant;
+  href?: string;
+  onClick?: () => void;
 }
 
 const colorClasses: Record<ColorVariant, string> = {
@@ -33,11 +36,26 @@ export function KPICard({
   subtext,
   icon: Icon,
   color,
+  href,
+  onClick,
 }: KPICardProps) {
+  const navigate = useNavigate();
   const isPositive = changeType === 'positive';
+  const isClickable = href || onClick;
+
+  const handleClick = () => {
+    if (onClick) {
+      onClick();
+    } else if (href) {
+      navigate(href);
+    }
+  };
 
   return (
-    <div className="card">
+    <div
+      className={`card ${isClickable ? 'cursor-pointer hover:shadow-md hover:border-primary-200 transition-all' : ''}`}
+      onClick={isClickable ? handleClick : undefined}
+    >
       <div className="flex items-start justify-between mb-4">
         <div className={`w-12 h-12 ${colorClasses[color]} rounded-xl flex items-center justify-center`}>
           <Icon className="w-6 h-6" />

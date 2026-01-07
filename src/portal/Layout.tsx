@@ -79,10 +79,12 @@ const reportModules: ReportModule[] = [
     basePath: '/maintenance',
     items: [
       { name: 'ภาพรวม', href: '/maintenance' },
+      { name: 'รายการงานทั้งหมด', href: '/maintenance/requests' },
       { name: 'ตามกลุ่มความรับผิดชอบ', href: '/maintenance/by-responsible' },
       { name: 'Aging Report', href: '/maintenance/aging' },
       { name: 'ประสิทธิภาพผู้รับเหมา', href: '/maintenance/contractor' },
       { name: 'งานผิดปกติ', href: '/maintenance/exception' },
+      { name: 'ตั้งค่า', href: '/maintenance/settings' },
     ],
   },
 ];
@@ -91,8 +93,6 @@ function Sidebar() {
   const location = useLocation();
   const { user } = useAuth();
   const [expandedModules, setExpandedModules] = useState<string[]>([
-    'Sales Reports',
-    'Transfer Reports',
     'Common Fee Reports',
     'Maintenance Reports',
   ]);

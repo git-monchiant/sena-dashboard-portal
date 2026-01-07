@@ -16,6 +16,8 @@ import {
   MaintenanceAgingPage,
   ContractorPage,
   MaintenanceExceptionPage,
+  MaintenanceSettingsPage,
+  MaintenanceRequestsPage,
 } from '@/reports';
 
 function App() {
@@ -49,10 +51,12 @@ function App() {
 
             {/* Maintenance Module */}
             <Route path="maintenance" element={<MaintenanceOverviewPage />} />
+            <Route path="maintenance/requests" element={<MaintenanceRequestsPage />} />
             <Route path="maintenance/by-responsible" element={<ByResponsiblePage />} />
             <Route path="maintenance/aging" element={<MaintenanceAgingPage />} />
             <Route path="maintenance/contractor" element={<ContractorPage />} />
             <Route path="maintenance/exception" element={<MaintenanceExceptionPage />} />
+            <Route path="maintenance/settings" element={<MaintenanceSettingsPage />} />
           </Route>
         </Routes>
       </Router>

@@ -23,6 +23,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   Legend,
+  LabelList,
 } from 'recharts';
 import { PageHeader } from '@shared/ui';
 import { responsibilityConfig, ResponsibilityType } from '../types';
@@ -139,7 +140,7 @@ export function ByResponsiblePage() {
               </div>
               <div>
                 <p className="text-xs text-slate-500">งานเปิดอยู่ทั้งหมด</p>
-                <p className="text-2xl font-bold text-amber-600">{totalOpen}</p>
+                <p className="text-2xl font-bold text-amber-600">{totalOpen.toLocaleString()}</p>
               </div>
             </div>
           </div>
@@ -150,7 +151,7 @@ export function ByResponsiblePage() {
               </div>
               <div>
                 <p className="text-xs text-slate-500">ค้าง &gt; 14 วัน (ต้องเร่ง)</p>
-                <p className="text-2xl font-bold text-red-600">{totalOver14Days}</p>
+                <p className="text-2xl font-bold text-red-600">{totalOver14Days.toLocaleString()}</p>
               </div>
             </div>
           </div>
@@ -161,7 +162,7 @@ export function ByResponsiblePage() {
               </div>
               <div>
                 <p className="text-xs text-slate-500">เสร็จสิ้นแล้ว</p>
-                <p className="text-2xl font-bold text-green-600">{totalCompleted}</p>
+                <p className="text-2xl font-bold text-green-600">{totalCompleted.toLocaleString()}</p>
               </div>
             </div>
           </div>
@@ -226,71 +227,75 @@ export function ByResponsiblePage() {
               />
               <Legend />
               <Area
-                type="monotone"
+                type="linear"
                 dataKey="total"
                 name="งานทั้งหมด"
                 stroke="#94a3b8"
                 strokeWidth={2}
                 fill="url(#totalGradient)"
-              />
+                dot={{ r: 2.5, fill: '#94a3b8' }}
+              >
+                <LabelList dataKey="total" position="top" fontSize={11} fill="#94a3b8" fontWeight={600} />
+              </Area>
               <Area
-                type="monotone"
+                type="linear"
                 dataKey="completed"
                 name="ปิดงานแล้ว"
                 stroke="#22c55e"
                 strokeWidth={2}
                 fill="url(#completedGradient)"
-              />
+                dot={{ r: 2.5, fill: '#22c55e' }}
+              >
+                <LabelList dataKey="completed" position="bottom" fontSize={11} fill="#22c55e" fontWeight={600} />
+              </Area>
             </AreaChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Action Buttons */}
+        {/* Quick Links */}
+        <div className="mb-4">
+          <h3 className="font-semibold text-slate-800">เมนูลัด</h3>
+          <p className="text-sm text-slate-500">นำทางไปยังรายงานเชิงลึก</p>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <button
             onClick={() => navigate('/maintenance/aging')}
-            className="card hover:shadow-lg transition-shadow flex items-center justify-between group border-l-4 border-amber-500"
+            className="card-hover flex items-center gap-4 text-left w-full group"
           >
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-50 rounded-lg">
-                <Calendar className="w-5 h-5 text-amber-600" />
-              </div>
-              <div className="text-left">
-                <p className="font-medium text-slate-800">Aging Report</p>
-                <p className="text-sm text-slate-500">ดูงานค้างตามอายุ</p>
-              </div>
+            <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center group-hover:bg-slate-200 transition-colors">
+              <Calendar className="w-6 h-6 text-slate-600" />
             </div>
-            <ArrowRight className="w-5 h-5 text-slate-400 group-hover:text-amber-600 transition-colors" />
+            <div className="flex-1">
+              <h4 className="font-medium text-slate-800">Aging Report</h4>
+              <p className="text-sm text-slate-500">ดูงานค้างตามอายุ</p>
+            </div>
+            <ArrowRight className="w-5 h-5 text-slate-400 group-hover:text-slate-600 transition-colors" />
           </button>
           <button
             onClick={() => navigate('/maintenance/exception')}
-            className="card hover:shadow-lg transition-shadow flex items-center justify-between group border-l-4 border-red-500"
+            className="card-hover flex items-center gap-4 text-left w-full group"
           >
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-red-50 rounded-lg">
-                <AlertTriangle className="w-5 h-5 text-red-600" />
-              </div>
-              <div className="text-left">
-                <p className="font-medium text-slate-800">งานผิดปกติ</p>
-                <p className="text-sm text-slate-500">งานซ้ำ, ยกเลิก, ค้างนาน</p>
-              </div>
+            <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center group-hover:bg-slate-200 transition-colors">
+              <AlertTriangle className="w-6 h-6 text-slate-600" />
             </div>
-            <ArrowRight className="w-5 h-5 text-slate-400 group-hover:text-red-600 transition-colors" />
+            <div className="flex-1">
+              <h4 className="font-medium text-slate-800">งานผิดปกติ</h4>
+              <p className="text-sm text-slate-500">งานซ้ำ, ยกเลิก, ค้างนาน</p>
+            </div>
+            <ArrowRight className="w-5 h-5 text-slate-400 group-hover:text-slate-600 transition-colors" />
           </button>
           <button
             onClick={() => navigate('/maintenance/contractor')}
-            className="card hover:shadow-lg transition-shadow flex items-center justify-between group border-l-4 border-blue-500"
+            className="card-hover flex items-center gap-4 text-left w-full group"
           >
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-50 rounded-lg">
-                <HardHat className="w-5 h-5 text-blue-600" />
-              </div>
-              <div className="text-left">
-                <p className="font-medium text-slate-800">จัดการผู้รับเหมา</p>
-                <p className="text-sm text-slate-500">ติดตามงานผู้รับเหมา</p>
-              </div>
+            <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center group-hover:bg-slate-200 transition-colors">
+              <HardHat className="w-6 h-6 text-slate-600" />
             </div>
-            <ArrowRight className="w-5 h-5 text-slate-400 group-hover:text-blue-600 transition-colors" />
+            <div className="flex-1">
+              <h4 className="font-medium text-slate-800">จัดการผู้รับเหมา</h4>
+              <p className="text-sm text-slate-500">ติดตามงานผู้รับเหมา</p>
+            </div>
+            <ArrowRight className="w-5 h-5 text-slate-400 group-hover:text-slate-600 transition-colors" />
           </button>
         </div>
       </div>
@@ -343,12 +348,12 @@ function TrackingCard({
       {/* Main Stats - Big Numbers */}
       <div className="grid grid-cols-2 gap-3 mb-4">
         <div className="bg-slate-50 rounded-xl p-3 text-center">
-          <p className="text-3xl font-bold text-slate-800">{stats.openJobs}</p>
+          <p className="text-3xl font-bold text-slate-800">{stats.openJobs.toLocaleString()}</p>
           <p className="text-xs text-slate-500 mt-1">งานเปิดอยู่</p>
         </div>
         <div className={`rounded-xl p-3 text-center ${hasUrgent ? 'bg-red-50' : 'bg-green-50'}`}>
           <p className={`text-3xl font-bold ${hasUrgent ? 'text-red-600' : 'text-green-600'}`}>
-            {stats.jobsOver14Days}
+            {stats.jobsOver14Days.toLocaleString()}
           </p>
           <p className="text-xs text-slate-500 mt-1">ค้าง &gt; 14 วัน</p>
         </div>
@@ -358,7 +363,7 @@ function TrackingCard({
       <div className="mb-4">
         <div className="flex justify-between items-center mb-2">
           <span className="text-sm font-medium text-slate-700">อายุงานค้าง</span>
-          <span className="text-xs text-slate-500">{stats.openJobs} งาน</span>
+          <span className="text-xs text-slate-500">{stats.openJobs.toLocaleString()} งาน</span>
         </div>
         <div className="flex gap-1 h-6 rounded-lg overflow-hidden">
           <div
@@ -366,7 +371,7 @@ function TrackingCard({
             style={{ width: `${(stats.jobsUnder7Days / stats.openJobs) * 100}%` }}
           >
             {stats.jobsUnder7Days > 0 && (
-              <span className="text-xs font-bold text-white">{stats.jobsUnder7Days}</span>
+              <span className="text-xs font-bold text-white">{stats.jobsUnder7Days.toLocaleString()}</span>
             )}
           </div>
           <div
@@ -374,7 +379,7 @@ function TrackingCard({
             style={{ width: `${(stats.jobs7to14Days / stats.openJobs) * 100}%` }}
           >
             {stats.jobs7to14Days > 0 && (
-              <span className="text-xs font-bold text-white">{stats.jobs7to14Days}</span>
+              <span className="text-xs font-bold text-white">{stats.jobs7to14Days.toLocaleString()}</span>
             )}
           </div>
           <div
@@ -382,7 +387,7 @@ function TrackingCard({
             style={{ width: `${(stats.jobsOver14Days / stats.openJobs) * 100}%` }}
           >
             {stats.jobsOver14Days > 0 && (
-              <span className="text-xs font-bold text-white">{stats.jobsOver14Days}</span>
+              <span className="text-xs font-bold text-white">{stats.jobsOver14Days.toLocaleString()}</span>
             )}
           </div>
         </div>
@@ -425,7 +430,7 @@ function TrackingCard({
         <div className="text-center p-2 bg-slate-50 rounded-lg">
           <div className="flex items-center justify-center gap-1">
             <CheckCircle className="w-3.5 h-3.5 text-blue-500" />
-            <span className="text-sm font-bold text-blue-600">{stats.completedJobs}</span>
+            <span className="text-sm font-bold text-blue-600">{stats.completedJobs.toLocaleString()}</span>
           </div>
           <p className="text-[10px] text-slate-500">เสร็จแล้ว</p>
         </div>
@@ -435,7 +440,7 @@ function TrackingCard({
       <div className="mb-4">
         <div className="flex justify-between text-xs mb-1">
           <span className="text-slate-600">ความคืบหน้า</span>
-          <span className="font-medium text-slate-700">{stats.completedJobs}/{stats.totalJobs}</span>
+          <span className="font-medium text-slate-700">{stats.completedJobs.toLocaleString()}/{stats.totalJobs.toLocaleString()}</span>
         </div>
         <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
           <div

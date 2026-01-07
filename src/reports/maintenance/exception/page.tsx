@@ -305,7 +305,7 @@ function SummaryCard({
         </div>
         <div>
           <p className="text-xs text-slate-500">{label}</p>
-          <p className={`text-lg font-bold ${colors.text}`}>{value}</p>
+          <p className={`text-lg font-bold ${colors.text}`}>{value.toLocaleString()}</p>
         </div>
       </div>
     </button>

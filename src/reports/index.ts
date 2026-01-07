@@ -10,7 +10,9 @@ export {
 export {
   MaintenanceOverviewPage,
   ByResponsiblePage,
-  SLAPage as MaintenanceAgingPage,
+  MaintenanceAgingPage,
   ContractorPage,
   ExceptionPage as MaintenanceExceptionPage,
+  MaintenanceSettingsPage,
+  MaintenanceRequestsPage,
 } from './maintenance';

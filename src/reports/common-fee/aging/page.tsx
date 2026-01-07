@@ -338,20 +338,6 @@ export function AgingReportPage() {
                 />
               </PieChart>
             </ResponsiveContainer>
-            <div className="grid grid-cols-2 gap-2 mt-4">
-              {summary.buckets.map((item) => (
-                <div key={item.bucket} className="flex items-center gap-2">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: item.color }}
-                  />
-                  <span className="text-sm text-slate-600">{item.label}</span>
-                  <span className="text-sm font-medium text-slate-800 ml-auto">
-                    {summary.totalAmount > 0 ? Math.round((item.amount / summary.totalAmount) * 100) : 0}%
-                  </span>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
 

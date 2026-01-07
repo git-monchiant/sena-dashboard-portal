@@ -11,6 +11,7 @@ import {
   Legend,
   LineChart,
   Line,
+  LabelList,
 } from 'recharts';
 import { PageHeader } from '@shared/ui';
 import { fetchContractorData, ContractorData, ContractorDetail } from './queries';
@@ -82,7 +83,7 @@ export function ContractorPage() {
             </div>
             <div>
               <p className="text-xs text-slate-500">งานทั้งหมด</p>
-              <p className="text-lg font-bold text-slate-800">{data.summary.totalJobs}</p>
+              <p className="text-lg font-bold text-slate-800">{data.summary.totalJobs.toLocaleString()}</p>
             </div>
           </div>
         </div>
@@ -216,11 +217,11 @@ export function ContractorPage() {
                       <p className="text-xs text-slate-500">{contractor.contactPerson} | {contractor.phone}</p>
                     </td>
                     <td className="py-3 px-4 text-sm text-slate-600">{contractor.category}</td>
-                    <td className="py-3 px-4 text-sm text-slate-600 text-right">{contractor.totalJobs}</td>
-                    <td className="py-3 px-4 text-sm text-slate-600 text-right">{contractor.completedJobs}</td>
+                    <td className="py-3 px-4 text-sm text-slate-600 text-right">{contractor.totalJobs.toLocaleString()}</td>
+                    <td className="py-3 px-4 text-sm text-slate-600 text-right">{contractor.completedJobs.toLocaleString()}</td>
                     <td className="py-3 px-4 text-right">
                       <span className={`text-sm font-medium ${contractor.jobsOver14Days > 5 ? 'text-red-600' : 'text-slate-600'}`}>
-                        {contractor.jobsOver14Days}
+                        {contractor.jobsOver14Days.toLocaleString()}
                       </span>
                     </td>
                     <td className="py-3 px-4 text-sm text-slate-600 text-right">{contractor.avgResolutionDays} วัน</td>
@@ -287,7 +288,7 @@ function ContractorExpandedView({
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-white rounded-lg p-3 border border-slate-200">
             <p className="text-xs text-slate-500">งานค้าง</p>
-            <p className="text-lg font-bold text-slate-800">{contractor.pendingJobs}</p>
+            <p className="text-lg font-bold text-slate-800">{contractor.pendingJobs.toLocaleString()}</p>
           </div>
           <div className="bg-white rounded-lg p-3 border border-slate-200">
             <p className="text-xs text-slate-500">อัตรางานซ้ำ</p>
@@ -315,8 +316,12 @@ function ContractorExpandedView({
             <XAxis dataKey="month" tick={{ fontSize: 10 }} />
             <YAxis tick={{ fontSize: 10 }} />
             <Tooltip />
-            <Line type="monotone" dataKey="jobs" name="งานเข้า" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
-            <Line type="monotone" dataKey="completed" name="เสร็จสิ้น" stroke="#22c55e" strokeWidth={2} dot={{ r: 3 }} />
+            <Line type="linear" dataKey="jobs" name="งานเข้า" stroke="#3b82f6" strokeWidth={2} dot={{ r: 2.5, fill: '#3b82f6' }}>
+              <LabelList dataKey="jobs" position="top" fontSize={10} fill="#3b82f6" fontWeight={600} />
+            </Line>
+            <Line type="linear" dataKey="completed" name="เสร็จสิ้น" stroke="#22c55e" strokeWidth={2} dot={{ r: 2.5, fill: '#22c55e' }}>
+              <LabelList dataKey="completed" position="bottom" fontSize={10} fill="#22c55e" fontWeight={600} />
+            </Line>
           </LineChart>
         </ResponsiveContainer>
       </div>

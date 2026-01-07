@@ -11,13 +11,13 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
-  Legend,
+  LabelList,
 } from 'recharts';
 import { PageHeader } from '@shared/ui';
-import { responsibilityConfig, priorityConfig } from '../types';
+import { responsibilityConfig, categoryConfig, priorityConfig } from '../types';
 import { fetchAgingData, AgingData } from './queries';
 
-export function SLAPage() {
+export function AgingPage() {
   const [data, setData] = useState<AgingData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -64,7 +64,7 @@ export function SLAPage() {
               </div>
               <div>
                 <p className="text-xs text-slate-500">งานเปิดอยู่</p>
-                <p className="text-xl font-bold text-slate-800">{data.summary.totalOpenJobs}</p>
+                <p className="text-xl font-bold text-slate-800">{data.summary.totalOpenJobs.toLocaleString()}</p>
               </div>
             </div>
           </div>
@@ -75,7 +75,7 @@ export function SLAPage() {
               </div>
               <div>
                 <p className="text-xs text-slate-500">&lt; 7 วัน</p>
-                <p className="text-xl font-bold text-green-600">{data.summary.jobsUnder7Days}</p>
+                <p className="text-xl font-bold text-green-600">{data.summary.jobsUnder7Days.toLocaleString()}</p>
               </div>
             </div>
           </div>
@@ -86,7 +86,7 @@ export function SLAPage() {
               </div>
               <div>
                 <p className="text-xs text-slate-500">7-14 วัน</p>
-                <p className="text-xl font-bold text-amber-600">{data.summary.jobs7to14Days}</p>
+                <p className="text-xl font-bold text-amber-600">{data.summary.jobs7to14Days.toLocaleString()}</p>
               </div>
             </div>
           </div>
@@ -97,7 +97,7 @@ export function SLAPage() {
               </div>
               <div>
                 <p className="text-xs text-slate-500">&gt; 14 วัน (ต้องเร่ง)</p>
-                <p className="text-xl font-bold text-red-600">{data.summary.jobsOver14Days}</p>
+                <p className="text-xl font-bold text-red-600">{data.summary.jobsOver14Days.toLocaleString()}</p>
               </div>
             </div>
           </div>
@@ -139,43 +139,96 @@ export function SLAPage() {
             </ResponsiveContainer>
           </div>
 
-          {/* Aging Trend */}
+          {/* Aging Trend with 4 lines */}
           <div className="card">
             <h3 className="font-semibold text-slate-800 mb-4">แนวโน้มอายุงานเฉลี่ยรายเดือน</h3>
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={data.agingTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip formatter={(value: number, name: string) => [
-                  name === 'avgDaysOpen' ? `${value} วัน` : `${value} งาน`,
-                  name === 'avgDaysOpen' ? 'อายุเฉลี่ย' : 'งานค้าง'
-                ]} />
-                <Legend />
+                <YAxis tick={{ fontSize: 12 }} domain={[0, 'auto']} tickFormatter={(v) => `${v}`} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#fff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
+                  }}
+                  formatter={(value: number) => [`${value} วัน`, '']}
+                />
                 <Line
-                  type="monotone"
+                  type="linear"
                   dataKey="avgDaysOpen"
-                  name="อายุเฉลี่ย (วัน)"
+                  stroke="#10b981"
+                  strokeWidth={3}
+                  dot={{ r: 3, fill: '#10b981' }}
+                  name="เฉลี่ยรวม"
+                >
+                  <LabelList dataKey="avgDaysOpen" position="top" fontSize={10} fill="#10b981" fontWeight={700} offset={8} />
+                </Line>
+                <Line
+                  type="linear"
+                  dataKey="outsource"
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  dot={{ r: 2.5, fill: '#3b82f6' }}
+                  name="ผู้รับเหมา"
+                >
+                  <LabelList dataKey="outsource" position="top" fontSize={10} fill="#3b82f6" fontWeight={600} offset={8} />
+                </Line>
+                <Line
+                  type="linear"
+                  dataKey="senaWarranty"
                   stroke="#8b5cf6"
                   strokeWidth={2}
-                  dot={{ fill: '#8b5cf6', r: 4 }}
-                />
+                  dot={{ r: 2.5, fill: '#8b5cf6' }}
+                  name="SENA"
+                >
+                  <LabelList dataKey="senaWarranty" position="bottom" fontSize={10} fill="#8b5cf6" fontWeight={600} offset={8} />
+                </Line>
+                <Line
+                  type="linear"
+                  dataKey="juristicTechnician"
+                  stroke="#f97316"
+                  strokeWidth={2}
+                  dot={{ r: 2.5, fill: '#f97316' }}
+                  name="ทีมช่าง"
+                >
+                  <LabelList dataKey="juristicTechnician" position="bottom" fontSize={10} fill="#f97316" fontWeight={600} offset={8} />
+                </Line>
               </LineChart>
             </ResponsiveContainer>
+            <div className="flex justify-center gap-5 mt-4">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-emerald-500 rounded-full" />
+                <span className="text-sm text-slate-600 font-medium">เฉลี่ยรวม</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-blue-500 rounded-full" />
+                <span className="text-sm text-slate-600">ผู้รับเหมา</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-purple-500 rounded-full" />
+                <span className="text-sm text-slate-600">SENA</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-orange-500 rounded-full" />
+                <span className="text-sm text-slate-600">ทีมช่าง</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Aging by Priority & Responsibility */}
+        {/* Aging by Category & Responsibility */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Aging by Priority */}
+          {/* Aging by Category */}
           <div className="card">
-            <h3 className="font-semibold text-slate-800 mb-4">อายุงานตามความเร่งด่วน</h3>
+            <h3 className="font-semibold text-slate-800 mb-4">อายุงานตาม Category</h3>
             <div className="space-y-4">
-              {data.agingByPriority.map((item) => {
-                const config = priorityConfig[item.priority];
-                const barWidth = (item.avgDaysOpen / 15) * 100; // 15 days as max reference
+              {data.agingByCategory.map((item) => {
+                const config = categoryConfig[item.category];
+                const barWidth = (item.avgDaysOpen / 15) * 100;
                 return (
-                  <div key={item.priority} className="space-y-1">
+                  <div key={item.category} className="space-y-1">
                     <div className="flex justify-between items-center">
                       <span className="text-sm font-medium text-slate-700">{config.label}</span>
                       <div className="flex items-center gap-4 text-sm">
@@ -224,15 +277,15 @@ export function SLAPage() {
                     </div>
                     <div className="grid grid-cols-3 gap-2 text-center">
                       <div className="bg-white rounded p-2">
-                        <p className="text-lg font-bold text-green-600">{item.jobsUnder7Days}</p>
+                        <p className="text-lg font-bold text-green-600">{item.jobsUnder7Days.toLocaleString()}</p>
                         <p className="text-xs text-slate-500">&lt; 7 วัน</p>
                       </div>
                       <div className="bg-white rounded p-2">
-                        <p className="text-lg font-bold text-amber-600">{item.jobs7to14Days}</p>
+                        <p className="text-lg font-bold text-amber-600">{item.jobs7to14Days.toLocaleString()}</p>
                         <p className="text-xs text-slate-500">7-14 วัน</p>
                       </div>
                       <div className="bg-white rounded p-2">
-                        <p className="text-lg font-bold text-red-600">{item.jobsOver14Days}</p>
+                        <p className="text-lg font-bold text-red-600">{item.jobsOver14Days.toLocaleString()}</p>
                         <p className="text-xs text-slate-500">&gt; 14 วัน</p>
                       </div>
                     </div>
