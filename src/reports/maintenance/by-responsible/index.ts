@@ -1,0 +1,1 @@
+export { ByResponsiblePage } from './page';

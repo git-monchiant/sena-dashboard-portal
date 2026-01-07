@@ -5,9 +5,11 @@ import {
   FolderOpen,
   TrendingUp,
   ArrowRightLeft,
+  Building,
   ChevronDown,
   ChevronRight,
   Building2,
+  Wrench,
 } from 'lucide-react';
 import { useAuth } from '@shared/auth';
 
@@ -59,6 +61,30 @@ const reportModules: ReportModule[] = [
       { name: 'Transfer Status', href: '/transfer/status' },
     ],
   },
+  {
+    name: 'Common Fee Reports',
+    icon: Building,
+    basePath: '/reports/common-fee',
+    items: [
+      { name: 'ภาพรวม', href: '/reports/common-fee' },
+      { name: 'รายละเอียดการเรียกเก็บ', href: '/reports/common-fee/collection' },
+      { name: 'Aging Report', href: '/reports/common-fee/aging' },
+      { name: 'เคสพิเศษ / ติดตามผล', href: '/reports/common-fee/exception' },
+      { name: 'ตั้งค่า', href: '/reports/common-fee/settings' },
+    ],
+  },
+  {
+    name: 'Maintenance Reports',
+    icon: Wrench,
+    basePath: '/maintenance',
+    items: [
+      { name: 'ภาพรวม', href: '/maintenance' },
+      { name: 'ตามกลุ่มความรับผิดชอบ', href: '/maintenance/by-responsible' },
+      { name: 'Aging Report', href: '/maintenance/aging' },
+      { name: 'ประสิทธิภาพผู้รับเหมา', href: '/maintenance/contractor' },
+      { name: 'งานผิดปกติ', href: '/maintenance/exception' },
+    ],
+  },
 ];
 
 function Sidebar() {
@@ -67,6 +93,8 @@ function Sidebar() {
   const [expandedModules, setExpandedModules] = useState<string[]>([
     'Sales Reports',
     'Transfer Reports',
+    'Common Fee Reports',
+    'Maintenance Reports',
   ]);
 
   const toggleModule = (moduleName: string) => {

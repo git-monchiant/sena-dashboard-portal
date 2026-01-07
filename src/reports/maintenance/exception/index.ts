@@ -1,0 +1,1 @@
+export { ExceptionPage } from './page';

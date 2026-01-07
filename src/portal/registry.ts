@@ -3,6 +3,7 @@ import {
   ArrowRightLeft,
   Wallet,
   Users,
+  Building,
   LucideIcon,
 } from 'lucide-react';
 
@@ -67,6 +68,27 @@ export const reportRegistry: ReportModuleConfig[] = [
       lastUpdated: '1 hour ago',
     },
     permissions: ['transfer:read'],
+  },
+  {
+    id: 'common-fee',
+    name: 'Common Fee Reports',
+    description:
+      'ระบบติดตามและจัดเก็บค่าส่วนกลาง ครอบคลุมการเรียกเก็บ การชำระ และการติดตามหนี้',
+    icon: Building,
+    color: 'teal',
+    href: '/reports/common-fee',
+    tags: ['Common Fee', 'Phase 1'],
+    highlights: [
+      'ภาพรวมค่าส่วนกลางรายโครงการ',
+      'รายละเอียดการเรียกเก็บและการชำระ',
+      'รายงาน Aging หนี้ค้างชำระ',
+      'เคสพิเศษและติดตามผล',
+    ],
+    stats: {
+      reports: 4,
+      lastUpdated: '1 hour ago',
+    },
+    permissions: ['common-fee:read'],
   },
   {
     id: 'finance',

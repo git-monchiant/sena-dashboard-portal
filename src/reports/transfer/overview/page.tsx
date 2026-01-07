@@ -26,6 +26,7 @@ import {
   PieChart,
   Pie,
   Cell,
+  LabelList,
 } from 'recharts';
 
 interface StatusBadgeProps {
@@ -216,9 +217,9 @@ export function TransferOverviewPage() {
               </div>
             </div>
             <ResponsiveContainer width="100%" height={280}>
-              <AreaChart data={data.transferTrend}>
+              <AreaChart data={data.transferTrend} margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="completedGradient" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="completedGradient2" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
                     <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                   </linearGradient>
@@ -242,15 +243,19 @@ export function TransferOverviewPage() {
                   dataKey="completed"
                   stroke="#10b981"
                   strokeWidth={2}
-                  fill="url(#completedGradient)"
-                />
+                  fill="url(#completedGradient2)"
+                >
+                  <LabelList dataKey="completed" position="top" fontSize={11} fill="#10b981" fontWeight={600} />
+                </Area>
                 <Area
                   type="monotone"
                   dataKey="pending"
                   stroke="#f59e0b"
                   strokeWidth={2}
                   fill="url(#pendingGradient)"
-                />
+                >
+                  <LabelList dataKey="pending" position="bottom" fontSize={11} fill="#f59e0b" fontWeight={600} />
+                </Area>
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -293,22 +298,41 @@ export function TransferOverviewPage() {
               <h3 className="font-semibold text-slate-800">Status Breakdown</h3>
               <p className="text-sm text-slate-500">Current status distribution</p>
             </div>
-            <ResponsiveContainer width="100%" height={200}>
+            <ResponsiveContainer width="100%" height={260}>
               <PieChart>
                 <Pie
-                  data={data.statusData}
+                  data={data.statusData.map(item => ({
+                    ...item,
+                    count: Math.round((data.kpis.totalTransfers.value * item.value) / 100),
+                  }))}
                   cx="50%"
-                  cy="50%"
+                  cy="55%"
                   innerRadius={50}
                   outerRadius={80}
                   paddingAngle={2}
                   dataKey="value"
+                  label={({ name, value }) => `${name} ${value}%`}
+                  labelLine={{ stroke: '#94a3b8', strokeWidth: 1 }}
                 >
                   {data.statusData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    const item = payload[0].payload;
+                    return (
+                      <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-lg">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                          <span className="text-sm text-slate-700">{item.status}</span>
+                        </div>
+                        <p className="text-sm font-semibold text-slate-800 mt-1">{item.count.toLocaleString()} transfers</p>
+                      </div>
+                    );
+                  }}
+                />
               </PieChart>
             </ResponsiveContainer>
             <div className="grid grid-cols-2 gap-2 mt-4">

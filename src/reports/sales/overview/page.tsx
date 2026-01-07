@@ -24,6 +24,7 @@ import {
   PieChart,
   Pie,
   Cell,
+  LabelList,
 } from 'recharts';
 
 interface QuickLinkCardProps {
@@ -160,7 +161,7 @@ export function SalesOverviewPage() {
               </select>
             </div>
             <ResponsiveContainer width="100%" height={280}>
-              <AreaChart data={data.salesTrend}>
+              <AreaChart data={data.salesTrend} margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="salesGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
@@ -183,7 +184,9 @@ export function SalesOverviewPage() {
                   stroke="#10b981"
                   strokeWidth={2}
                   fill="url(#salesGradient)"
-                />
+                >
+                  <LabelList dataKey="sales" position="top" fontSize={11} fill="#10b981" fontWeight={600} />
+                </Area>
                 <Area
                   type="monotone"
                   dataKey="target"
@@ -191,7 +194,9 @@ export function SalesOverviewPage() {
                   strokeWidth={2}
                   strokeDasharray="5 5"
                   fill="none"
-                />
+                >
+                  <LabelList dataKey="target" position="bottom" fontSize={11} fill="#94a3b8" fontWeight={600} />
+                </Area>
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -236,22 +241,41 @@ export function SalesOverviewPage() {
               <h3 className="font-semibold text-slate-800">Sales by Channel</h3>
               <p className="text-sm text-slate-500">Distribution breakdown</p>
             </div>
-            <ResponsiveContainer width="100%" height={200}>
+            <ResponsiveContainer width="100%" height={260}>
               <PieChart>
                 <Pie
-                  data={data.channelData}
+                  data={data.channelData.map(item => ({
+                    ...item,
+                    count: Math.round((data.kpis.unitsSold.value * item.value) / 100),
+                  }))}
                   cx="50%"
-                  cy="50%"
+                  cy="55%"
                   innerRadius={50}
                   outerRadius={80}
                   paddingAngle={2}
                   dataKey="value"
+                  label={({ name, value }) => `${name} ${value}%`}
+                  labelLine={{ stroke: '#94a3b8', strokeWidth: 1 }}
                 >
                   {data.channelData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    const item = payload[0].payload;
+                    return (
+                      <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-lg">
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                          <span className="text-sm text-slate-700">{item.name}</span>
+                        </div>
+                        <p className="text-sm font-semibold text-slate-800 mt-1">{item.count.toLocaleString()} units</p>
+                      </div>
+                    );
+                  }}
+                />
               </PieChart>
             </ResponsiveContainer>
             <div className="grid grid-cols-2 gap-2 mt-4">

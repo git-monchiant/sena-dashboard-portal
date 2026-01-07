@@ -1,0 +1,1 @@
+export { ContractorPage } from './page';

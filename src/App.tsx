@@ -6,6 +6,16 @@ import {
   SalesPipelinePage,
   TransferOverviewPage,
   TransferAgingPage,
+  CommonFeeOverviewPage,
+  CollectionDetailPage,
+  AgingReportPage,
+  ExceptionPage,
+  CommonFeeSettingsPage,
+  MaintenanceOverviewPage,
+  ByResponsiblePage,
+  MaintenanceAgingPage,
+  ContractorPage,
+  MaintenanceExceptionPage,
 } from '@/reports';
 
 function App() {
@@ -29,6 +39,20 @@ function App() {
             <Route path="transfer/aging" element={<TransferAgingPage />} />
             <Route path="transfer/status" element={<TransferOverviewPage />} />
             <Route path="transfer/documents" element={<TransferOverviewPage />} />
+
+            {/* Common Fee Module */}
+            <Route path="reports/common-fee" element={<CommonFeeOverviewPage />} />
+            <Route path="reports/common-fee/collection" element={<CollectionDetailPage />} />
+            <Route path="reports/common-fee/aging" element={<AgingReportPage />} />
+            <Route path="reports/common-fee/exception" element={<ExceptionPage />} />
+            <Route path="reports/common-fee/settings" element={<CommonFeeSettingsPage />} />
+
+            {/* Maintenance Module */}
+            <Route path="maintenance" element={<MaintenanceOverviewPage />} />
+            <Route path="maintenance/by-responsible" element={<ByResponsiblePage />} />
+            <Route path="maintenance/aging" element={<MaintenanceAgingPage />} />
+            <Route path="maintenance/contractor" element={<ContractorPage />} />
+            <Route path="maintenance/exception" element={<MaintenanceExceptionPage />} />
           </Route>
         </Routes>
       </Router>
