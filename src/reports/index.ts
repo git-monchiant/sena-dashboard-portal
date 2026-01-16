@@ -16,3 +16,9 @@ export {
   MaintenanceSettingsPage,
   MaintenanceRequestsPage,
 } from './maintenance';
+export {
+  SalesPerformance2025Page,
+  ProjectDetailPage,
+  EmployeeListPage,
+  EmployeeDetailPage
+} from './sales-2025';

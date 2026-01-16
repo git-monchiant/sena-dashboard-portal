@@ -18,6 +18,10 @@ import {
   MaintenanceExceptionPage,
   MaintenanceSettingsPage,
   MaintenanceRequestsPage,
+  SalesPerformance2025Page,
+  ProjectDetailPage,
+  EmployeeListPage,
+  EmployeeDetailPage,
 } from '@/reports';
 
 function App() {
@@ -29,6 +33,12 @@ function App() {
             {/* Main Navigation */}
             <Route index element={<MainDashboardPage />} />
             <Route path="reports" element={<CatalogPage />} />
+
+            {/* Sales Report 2025 Module */}
+            <Route path="sales-2025/performance" element={<SalesPerformance2025Page />} />
+            <Route path="sales-2025/project/:projectCode" element={<ProjectDetailPage />} />
+            <Route path="sales-2025/employees" element={<EmployeeListPage />} />
+            <Route path="sales-2025/employee/:name" element={<EmployeeDetailPage />} />
 
             {/* Sales Module */}
             <Route path="sales" element={<SalesOverviewPage />} />
