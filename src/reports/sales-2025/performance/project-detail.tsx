@@ -8,6 +8,7 @@ import {
   TrendingUp,
   Users,
   UserCheck,
+  Megaphone,
 } from 'lucide-react';
 import {
   BarChart,
@@ -37,6 +38,18 @@ interface PerformanceRow {
   revenue_actual: number;
   revenue_achieve_pct: number;
   mkt_expense_actual: number;
+  // Marketing fields
+  total_lead: number;
+  quality_lead: number;
+  walk: number;
+  book: number;
+  lead_to_walk: number;
+  walk_to_book: number;
+  cpl: number;
+  cpql: number;
+  mkt_pct_booking: number;
+  mkt_pct_presale_livnex: number;
+  mkt_pct_revenue: number;
 }
 
 interface TeamMember {
@@ -124,8 +137,23 @@ export function ProjectDetailPage() {
   const totalBooking = data.reduce((sum, r) => sum + Number(r.booking_actual), 0);
   const totalMktExpense = data.reduce((sum, r) => sum + Number(r.mkt_expense_actual), 0);
 
+  // Marketing totals
+  const totalLead = data.reduce((sum, r) => sum + Number(r.total_lead || 0), 0);
+  const totalQualityLead = data.reduce((sum, r) => sum + Number(r.quality_lead || 0), 0);
+  const totalWalk = data.reduce((sum, r) => sum + Number(r.walk || 0), 0);
+  const totalBook = data.reduce((sum, r) => sum + Number(r.book || 0), 0);
+
   const presaleAchieve = totalPresaleTarget > 0 ? (totalPresaleActual / totalPresaleTarget) * 100 : 0;
   const revenueAchieve = totalRevenueTarget > 0 ? (totalRevenueActual / totalRevenueTarget) * 100 : 0;
+
+  // Marketing metrics
+  const avgCPL = totalLead > 0 ? totalMktExpense / totalLead : 0;
+  const avgCPQL = totalQualityLead > 0 ? totalMktExpense / totalQualityLead : 0;
+  const mktPctBooking = totalBooking > 0 ? (totalMktExpense / totalBooking) * 100 : 0;
+  const mktPctPresale = totalPresaleActual > 0 ? (totalMktExpense / totalPresaleActual) * 100 : 0;
+  const mktPctRevenue = totalRevenueActual > 0 ? (totalMktExpense / totalRevenueActual) * 100 : 0;
+  const leadToWalkPct = totalQualityLead > 0 ? (totalWalk / totalQualityLead) * 100 : 0;
+  const walkToBookPct = totalWalk > 0 ? (totalBook / totalWalk) * 100 : 0;
 
   // Chart data by quarter
   const chartData = data.map(d => ({
@@ -135,6 +163,15 @@ export function ProjectDetailPage() {
     'Revenue Target': Number(d.revenue_target),
     'Revenue Actual': Number(d.revenue_actual),
     'Booking': Number(d.booking_actual),
+  }));
+
+  // Lead Funnel chart data
+  const leadFunnelData = data.map(d => ({
+    quarter: d.quarter,
+    'Total Lead': Number(d.total_lead || 0),
+    'Quality Lead': Number(d.quality_lead || 0),
+    'Walk': Number(d.walk || 0),
+    'Book': Number(d.book || 0),
   }));
 
   // Split team by role
@@ -168,6 +205,14 @@ export function ProjectDetailPage() {
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <KPICard
+            title="Total Booking (YTD)"
+            value={formatCurrency(totalBooking)}
+            change="ยอดจอง"
+            changeType="positive"
+            icon={TrendingUp}
+            color="purple"
+          />
+          <KPICard
             title="Presale Actual (YTD)"
             value={formatCurrency(totalPresaleActual)}
             change={`${presaleAchieve.toFixed(1)}% of target`}
@@ -184,14 +229,6 @@ export function ProjectDetailPage() {
             target={{ percentage: Math.min(revenueAchieve, 100) }}
             icon={DollarSign}
             color="blue"
-          />
-          <KPICard
-            title="Total Booking (YTD)"
-            value={formatCurrency(totalBooking)}
-            change="ยอดจอง"
-            changeType="positive"
-            icon={TrendingUp}
-            color="purple"
           />
           <KPICard
             title="Marketing Expense"
@@ -305,6 +342,158 @@ export function ProjectDetailPage() {
           </div>
         </div>
 
+        {/* Marketing Performance Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Lead Funnel Chart */}
+          <div className="card">
+            <div className="mb-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Megaphone className="w-5 h-5 text-orange-500" />
+                <h3 className="font-semibold text-slate-800">Lead Conversion Funnel</h3>
+              </div>
+              <p className="text-sm text-slate-500">Total Lead → Quality Lead → Walk → Book</p>
+            </div>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={leadFunnelData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="quarter" stroke="#64748b" fontSize={12} />
+                <YAxis stroke="#64748b" fontSize={12} />
+                <Tooltip
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload) return null;
+                    const orderedKeys = ['Total Lead', 'Quality Lead', 'Walk', 'Book'];
+                    const colors: Record<string, string> = {
+                      'Total Lead': '#64748b',
+                      'Quality Lead': '#8b5cf6',
+                      'Walk': '#10b981',
+                      'Book': '#3b82f6',
+                    };
+                    return (
+                      <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-lg">
+                        <p className="font-medium text-slate-700 mb-2">{label}</p>
+                        {orderedKeys.map((key) => {
+                          const item = payload.find((p) => p.dataKey === key);
+                          if (!item) return null;
+                          return (
+                            <div key={key} className="flex items-center gap-2 text-sm">
+                              <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: colors[key] }} />
+                              <span className="text-slate-600">{key}:</span>
+                              <span className="font-medium">{Number(item.value).toLocaleString()}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  }}
+                />
+                <Legend
+                  content={() => (
+                    <div className="flex justify-center gap-4 pt-2">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#64748b' }} />
+                        <span className="text-xs text-slate-600">Total Lead</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#8b5cf6' }} />
+                        <span className="text-xs text-slate-600">Q.Lead</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#10b981' }} />
+                        <span className="text-xs text-slate-600">Walk</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#3b82f6' }} />
+                        <span className="text-xs text-slate-600">Book</span>
+                      </div>
+                    </div>
+                  )}
+                />
+                <Bar dataKey="Total Lead" fill="#64748b" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Quality Lead" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Walk" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Book" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Marketing Metrics Card */}
+          <div className="card">
+            <div className="mb-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Megaphone className="w-5 h-5 text-orange-500" />
+                <h3 className="font-semibold text-slate-800">Marketing Metrics (YTD)</h3>
+              </div>
+              <p className="text-sm text-slate-500">CPL, CPQL และ MKT%</p>
+            </div>
+
+            <div className="space-y-4">
+              {/* Lead Summary */}
+              <div className="p-4 bg-slate-50 rounded-lg">
+                <div className="text-sm font-medium text-slate-600 mb-3">Lead Funnel Summary</div>
+                <div className="grid grid-cols-4 gap-3 text-center">
+                  <div>
+                    <div className="text-xl font-bold text-slate-700">{totalLead.toLocaleString()}</div>
+                    <div className="text-xs text-slate-500">Total Lead</div>
+                  </div>
+                  <div>
+                    <div className="text-xl font-bold text-purple-600">{totalQualityLead.toLocaleString()}</div>
+                    <div className="text-xs text-slate-500">Quality Lead</div>
+                  </div>
+                  <div>
+                    <div className="text-xl font-bold text-emerald-600">{totalWalk.toLocaleString()}</div>
+                    <div className="text-xs text-slate-500">Walk</div>
+                  </div>
+                  <div>
+                    <div className="text-xl font-bold text-blue-600">{totalBook.toLocaleString()}</div>
+                    <div className="text-xs text-slate-500">Book</div>
+                  </div>
+                </div>
+                <div className="flex justify-center gap-6 mt-3 pt-3 border-t border-slate-200">
+                  <div className="text-center">
+                    <div className="text-sm font-semibold text-emerald-600">{leadToWalkPct.toFixed(1)}%</div>
+                    <div className="text-xs text-slate-500">Q.L → Walk</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-sm font-semibold text-blue-600">{walkToBookPct.toFixed(1)}%</div>
+                    <div className="text-xs text-slate-500">Walk → Book</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* CPL/CPQL */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-4 bg-purple-50 rounded-lg text-center">
+                  <div className="text-2xl font-bold text-purple-700">฿{avgCPL.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
+                  <div className="text-sm text-purple-600">CPL (Cost per Lead)</div>
+                </div>
+                <div className="p-4 bg-orange-50 rounded-lg text-center">
+                  <div className="text-2xl font-bold text-orange-700">฿{avgCPQL.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
+                  <div className="text-sm text-orange-600">CPQL (Cost per Q.Lead)</div>
+                </div>
+              </div>
+
+              {/* MKT % */}
+              <div className="p-4 bg-gradient-to-r from-orange-50 to-amber-50 rounded-lg">
+                <div className="text-sm font-medium text-slate-600 mb-3">MKT % (ค่าใช้จ่าย MKT / ยอดขาย)</div>
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div>
+                    <div className="text-lg font-bold text-purple-700">{mktPctBooking.toFixed(2)}%</div>
+                    <div className="text-xs text-slate-500">vs Booking</div>
+                  </div>
+                  <div>
+                    <div className="text-lg font-bold text-emerald-700">{mktPctPresale.toFixed(2)}%</div>
+                    <div className="text-xs text-slate-500">vs Presale</div>
+                  </div>
+                  <div>
+                    <div className="text-lg font-bold text-blue-700">{mktPctRevenue.toFixed(2)}%</div>
+                    <div className="text-xs text-slate-500">vs Revenue</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Quarterly Detail Table */}
         <div className="card">
           <div className="mb-4">
@@ -317,11 +506,11 @@ export function ProjectDetailPage() {
                 <tr className="border-b border-slate-200">
                   <th className="text-center py-3 px-4 font-semibold text-slate-600">Quarter</th>
                   <th className="text-right py-3 px-4 font-semibold text-slate-600">Booking</th>
-                  <th className="text-right py-3 px-4 font-semibold text-slate-600">Presale Target</th>
-                  <th className="text-right py-3 px-4 font-semibold text-slate-600">Presale Actual</th>
+                  <th className="text-right py-3 px-4 font-semibold text-emerald-500">Presale Target</th>
+                  <th className="text-right py-3 px-4 font-semibold text-emerald-700">Presale Actual</th>
                   <th className="text-right py-3 px-4 font-semibold text-slate-600">Achieve %</th>
-                  <th className="text-right py-3 px-4 font-semibold text-slate-600">Revenue Target</th>
-                  <th className="text-right py-3 px-4 font-semibold text-slate-600">Revenue Actual</th>
+                  <th className="text-right py-3 px-4 font-semibold text-blue-500">Revenue Target</th>
+                  <th className="text-right py-3 px-4 font-semibold text-blue-700">Revenue Actual</th>
                   <th className="text-right py-3 px-4 font-semibold text-slate-600">Achieve %</th>
                   <th className="text-right py-3 px-4 font-semibold text-slate-600">MKT Expense</th>
                 </tr>
@@ -333,8 +522,8 @@ export function ProjectDetailPage() {
                       <span className="px-3 py-1 bg-slate-100 rounded-lg text-sm font-medium">{row.quarter}</span>
                     </td>
                     <td className="py-3 px-4 text-right font-mono">{formatCurrency(row.booking_actual)}</td>
-                    <td className="py-3 px-4 text-right font-mono text-slate-500">{formatCurrency(row.presale_target)}</td>
-                    <td className="py-3 px-4 text-right font-mono font-medium text-emerald-600">{formatCurrency(row.presale_actual)}</td>
+                    <td className="py-3 px-4 text-right font-mono text-emerald-500">{formatCurrency(row.presale_target)}</td>
+                    <td className="py-3 px-4 text-right font-mono font-medium text-emerald-700">{formatCurrency(row.presale_actual)}</td>
                     <td className="py-3 px-4 text-right">
                       <span className={`px-2 py-1 rounded text-xs font-medium ${
                         row.presale_achieve_pct >= 0.8 ? 'bg-emerald-100 text-emerald-700' :
@@ -344,8 +533,8 @@ export function ProjectDetailPage() {
                         {(row.presale_achieve_pct * 100).toFixed(1)}%
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-right font-mono text-slate-500">{formatCurrency(row.revenue_target)}</td>
-                    <td className="py-3 px-4 text-right font-mono font-medium text-blue-600">{formatCurrency(row.revenue_actual)}</td>
+                    <td className="py-3 px-4 text-right font-mono text-blue-500">{formatCurrency(row.revenue_target)}</td>
+                    <td className="py-3 px-4 text-right font-mono font-medium text-blue-700">{formatCurrency(row.revenue_actual)}</td>
                     <td className="py-3 px-4 text-right">
                       <span className={`px-2 py-1 rounded text-xs font-medium ${
                         row.revenue_achieve_pct >= 0.8 ? 'bg-emerald-100 text-emerald-700' :
@@ -362,8 +551,8 @@ export function ProjectDetailPage() {
                 <tr className="bg-slate-50 font-semibold">
                   <td className="py-3 px-4 text-center">Total</td>
                   <td className="py-3 px-4 text-right font-mono">{formatCurrency(totalBooking)}</td>
-                  <td className="py-3 px-4 text-right font-mono text-slate-500">{formatCurrency(totalPresaleTarget)}</td>
-                  <td className="py-3 px-4 text-right font-mono text-emerald-600">{formatCurrency(totalPresaleActual)}</td>
+                  <td className="py-3 px-4 text-right font-mono text-emerald-500">{formatCurrency(totalPresaleTarget)}</td>
+                  <td className="py-3 px-4 text-right font-mono text-emerald-700">{formatCurrency(totalPresaleActual)}</td>
                   <td className="py-3 px-4 text-right">
                     <span className={`px-2 py-1 rounded text-xs font-medium ${
                       presaleAchieve >= 80 ? 'bg-emerald-100 text-emerald-700' :
@@ -373,8 +562,8 @@ export function ProjectDetailPage() {
                       {presaleAchieve.toFixed(1)}%
                     </span>
                   </td>
-                  <td className="py-3 px-4 text-right font-mono text-slate-500">{formatCurrency(totalRevenueTarget)}</td>
-                  <td className="py-3 px-4 text-right font-mono text-blue-600">{formatCurrency(totalRevenueActual)}</td>
+                  <td className="py-3 px-4 text-right font-mono text-blue-500">{formatCurrency(totalRevenueTarget)}</td>
+                  <td className="py-3 px-4 text-right font-mono text-blue-700">{formatCurrency(totalRevenueActual)}</td>
                   <td className="py-3 px-4 text-right">
                     <span className={`px-2 py-1 rounded text-xs font-medium ${
                       revenueAchieve >= 80 ? 'bg-emerald-100 text-emerald-700' :

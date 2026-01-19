@@ -3,5 +3,6 @@ export {
   SalesPerformanceFilters,
   ProjectDetailPage,
   EmployeeListPage,
-  EmployeeDetailPage
+  EmployeeDetailPage,
+  MarketingPerformancePage
 } from './performance';

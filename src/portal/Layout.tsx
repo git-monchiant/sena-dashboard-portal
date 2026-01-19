@@ -42,12 +42,12 @@ const navigation: NavItem[] = [
 
 const reportModules: ReportModule[] = [
   {
-    name: 'Sales Report 2025',
+    name: '2025 Performance',
     icon: BarChart3,
     basePath: '/sales-2025',
     items: [
-      { name: 'Project Performance', href: '/sales-2025/performance' },
-      { name: 'Employee Performance', href: '/sales-2025/employees' },
+      { name: 'Sales Performance', href: '/sales-2025/performance' },
+      { name: 'Marketing Performance', href: '/sales-2025/marketing' },
     ],
   },
   {
@@ -103,9 +103,7 @@ function Sidebar() {
   const location = useLocation();
   const { user } = useAuth();
   const [expandedModules, setExpandedModules] = useState<string[]>([
-    'Sales Report 2025',
-    'Common Fee Reports',
-    'Maintenance Reports',
+    '2025 Performance',
   ]);
 
   const toggleModule = (moduleName: string) => {

@@ -20,5 +20,6 @@ export {
   SalesPerformance2025Page,
   ProjectDetailPage,
   EmployeeListPage,
-  EmployeeDetailPage
+  EmployeeDetailPage,
+  MarketingPerformancePage
 } from './sales-2025';

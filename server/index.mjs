@@ -120,7 +120,18 @@ app.get('/api/sales-2025/performance', async (req, res) => {
           COALESCE(NULLIF(p.revenue_target, '-'), '0')::numeric as revenue_target,
           COALESCE(NULLIF(p.revenue_actual, '-'), '0')::numeric as revenue_actual,
           COALESCE(NULLIF(p.revenue_achieve_pct, '-'), '0')::numeric as revenue_achieve_pct,
-          COALESCE(NULLIF(p.mkt_expense_actual, '-'), '0')::numeric as mkt_expense_actual
+          COALESCE(NULLIF(p.mkt_expense_actual, '-'), '0')::numeric as mkt_expense_actual,
+          COALESCE(NULLIF(p.total_lead, '-'), '0')::numeric as total_lead,
+          COALESCE(NULLIF(p.quality_lead, '-'), '0')::numeric as quality_lead,
+          COALESCE(NULLIF(p.lead_new_rem_walk, '-'), '0')::numeric as walk,
+          COALESCE(NULLIF(p.lead_new_rem_book, '-'), '0')::numeric as book,
+          COALESCE(NULLIF(p.lead_to_walk, '-'), '0')::numeric as lead_to_walk,
+          COALESCE(NULLIF(p.walk_to_book, '-'), '0')::numeric as walk_to_book,
+          COALESCE(NULLIF(p.cpl, '-'), '0')::numeric as cpl,
+          COALESCE(NULLIF(p.cpql, '-'), '0')::numeric as cpql,
+          COALESCE(NULLIF(p.mkt_pct_booking, '-'), '0')::numeric as mkt_pct_booking,
+          COALESCE(NULLIF(p.mkt_pct_presale_livnex, '-'), '0')::numeric as mkt_pct_presale_livnex,
+          COALESCE(NULLIF(p.mkt_pct_revenue, '-'), '0')::numeric as mkt_pct_revenue
         FROM "Performance2025" p
         WHERE (${conditions.join(' OR ')})
       `;
@@ -160,7 +171,18 @@ app.get('/api/sales-2025/performance', async (req, res) => {
         COALESCE(NULLIF(p.revenue_target, '-'), '0')::numeric as revenue_target,
         COALESCE(NULLIF(p.revenue_actual, '-'), '0')::numeric as revenue_actual,
         COALESCE(NULLIF(p.revenue_achieve_pct, '-'), '0')::numeric as revenue_achieve_pct,
-        COALESCE(NULLIF(p.mkt_expense_actual, '-'), '0')::numeric as mkt_expense_actual
+        COALESCE(NULLIF(p.mkt_expense_actual, '-'), '0')::numeric as mkt_expense_actual,
+        COALESCE(NULLIF(p.total_lead, '-'), '0')::numeric as total_lead,
+        COALESCE(NULLIF(p.quality_lead, '-'), '0')::numeric as quality_lead,
+        COALESCE(NULLIF(p.lead_new_rem_walk, '-'), '0')::numeric as walk,
+        COALESCE(NULLIF(p.lead_new_rem_book, '-'), '0')::numeric as book,
+        COALESCE(NULLIF(p.lead_to_walk, '-'), '0')::numeric as lead_to_walk,
+        COALESCE(NULLIF(p.walk_to_book, '-'), '0')::numeric as walk_to_book,
+        COALESCE(NULLIF(p.cpl, '-'), '0')::numeric as cpl,
+        COALESCE(NULLIF(p.cpql, '-'), '0')::numeric as cpql,
+        COALESCE(NULLIF(p.mkt_pct_booking, '-'), '0')::numeric as mkt_pct_booking,
+        COALESCE(NULLIF(p.mkt_pct_presale_livnex, '-'), '0')::numeric as mkt_pct_presale_livnex,
+        COALESCE(NULLIF(p.mkt_pct_revenue, '-'), '0')::numeric as mkt_pct_revenue
       FROM "Performance2025" p
       WHERE 1=1
     `;
@@ -286,7 +308,11 @@ app.get('/api/sales-2025/summary', async (req, res) => {
           SUM(COALESCE(NULLIF(p.presale_target, '-'), '0')::numeric) as total_presale_target,
           SUM(COALESCE(NULLIF(p.presale_actual, '-'), '0')::numeric) as total_presale_actual,
           SUM(COALESCE(NULLIF(p.revenue_target, '-'), '0')::numeric) as total_revenue_target,
-          SUM(COALESCE(NULLIF(p.revenue_actual, '-'), '0')::numeric) as total_revenue_actual
+          SUM(COALESCE(NULLIF(p.revenue_actual, '-'), '0')::numeric) as total_revenue_actual,
+          SUM(COALESCE(NULLIF(p.total_lead, '-'), '0')::numeric) as total_lead,
+          SUM(COALESCE(NULLIF(p.quality_lead, '-'), '0')::numeric) as total_quality_lead,
+          SUM(COALESCE(NULLIF(p.lead_new_rem_walk, '-'), '0')::numeric) as total_walk,
+          SUM(COALESCE(NULLIF(p.lead_new_rem_book, '-'), '0')::numeric) as total_book
         FROM "Performance2025" p
         WHERE (${conditions.join(' OR ')})
       `;
@@ -323,7 +349,11 @@ app.get('/api/sales-2025/summary', async (req, res) => {
         SUM(COALESCE(NULLIF(p.presale_target, '-'), '0')::numeric) as total_presale_target,
         SUM(COALESCE(NULLIF(p.presale_actual, '-'), '0')::numeric) as total_presale_actual,
         SUM(COALESCE(NULLIF(p.revenue_target, '-'), '0')::numeric) as total_revenue_target,
-        SUM(COALESCE(NULLIF(p.revenue_actual, '-'), '0')::numeric) as total_revenue_actual
+        SUM(COALESCE(NULLIF(p.revenue_actual, '-'), '0')::numeric) as total_revenue_actual,
+        SUM(COALESCE(NULLIF(p.total_lead, '-'), '0')::numeric) as total_lead,
+        SUM(COALESCE(NULLIF(p.quality_lead, '-'), '0')::numeric) as total_quality_lead,
+        SUM(COALESCE(NULLIF(p.lead_new_rem_walk, '-'), '0')::numeric) as total_walk,
+        SUM(COALESCE(NULLIF(p.lead_new_rem_book, '-'), '0')::numeric) as total_book
       FROM "Performance2025" p
       WHERE 1=1
     `;
@@ -352,6 +382,282 @@ app.get('/api/sales-2025/summary', async (req, res) => {
     res.json(result.rows);
   } catch (err) {
     console.error('Error fetching summary:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Marketing Performance Summary
+app.get('/api/sales-2025/marketing-summary', async (req, res) => {
+  try {
+    const { vp, mgr, bud, quarter, project } = req.query;
+
+    // If VP or MGR filter is applied, we need to filter by their responsible quarters
+    if (vp || mgr) {
+      const personName = vp || mgr;
+      const roleType = vp ? 'VP' : 'MGR';
+
+      // Get project-month mapping for this person
+      const mappingResult = await pool.query(`
+        SELECT project_code, month FROM "Project_User_Mapping"
+        WHERE department = 'Sale' AND role_type = $1 AND name = $2
+      `, [roleType, personName]);
+
+      // Group by project and get quarters
+      const projectQuarters = {};
+      mappingResult.rows.forEach(row => {
+        if (!projectQuarters[row.project_code]) {
+          projectQuarters[row.project_code] = new Set();
+        }
+        const q = monthToQuarter(row.month);
+        if (q) projectQuarters[row.project_code].add(q);
+      });
+
+      // Build conditions for (project_code, quarter) pairs
+      const conditions = [];
+      const params = [];
+      let paramIndex = 1;
+
+      for (const [projCode, quarters] of Object.entries(projectQuarters)) {
+        const quarterArray = Array.from(quarters);
+        conditions.push(`(p.project_code = $${paramIndex} AND p.quarter = ANY($${paramIndex + 1}))`);
+        params.push(projCode);
+        params.push(quarterArray);
+        paramIndex += 2;
+      }
+
+      if (conditions.length === 0) {
+        return res.json([]);
+      }
+
+      let query = `
+        SELECT
+          p.quarter,
+          COUNT(DISTINCT p.project_code) as project_count,
+          SUM(COALESCE(NULLIF(p.mkt_expense_actual, '-'), '0')::numeric) as total_mkt_expense,
+          SUM(COALESCE(NULLIF(p.total_lead, '-'), '0')::numeric) as total_lead,
+          SUM(COALESCE(NULLIF(p.quality_lead, '-'), '0')::numeric) as total_quality_lead,
+          SUM(COALESCE(NULLIF(p.lead_new_rem_walk, '-'), '0')::numeric) as total_walk,
+          SUM(COALESCE(NULLIF(p.lead_new_rem_book, '-'), '0')::numeric) as total_book,
+          SUM(COALESCE(NULLIF(p.booking_actual, '-'), '0')::numeric) as total_booking,
+          SUM(COALESCE(NULLIF(p.presale_target, '-'), '0')::numeric) as total_presale_target,
+          SUM(COALESCE(NULLIF(p.presale_actual, '-'), '0')::numeric) + SUM(COALESCE(NULLIF(p.livnex_actual, '-'), '0')::numeric) as total_presale_livnex,
+          SUM(COALESCE(NULLIF(p.revenue_target, '-'), '0')::numeric) as total_revenue_target,
+          SUM(COALESCE(NULLIF(p.revenue_actual, '-'), '0')::numeric) as total_revenue,
+          AVG(COALESCE(NULLIF(p.cpl, '-'), '0')::numeric) as avg_cpl,
+          AVG(COALESCE(NULLIF(p.cpql, '-'), '0')::numeric) as avg_cpql,
+          AVG(COALESCE(NULLIF(p.mkt_pct_booking, '-'), '0')::numeric) as avg_mkt_pct_booking,
+          AVG(COALESCE(NULLIF(p.mkt_pct_presale_livnex, '-'), '0')::numeric) as avg_mkt_pct_presale_livnex,
+          AVG(COALESCE(NULLIF(p.mkt_pct_revenue, '-'), '0')::numeric) as avg_mkt_pct_revenue
+        FROM "Performance2025" p
+        WHERE (${conditions.join(' OR ')})
+      `;
+
+      if (bud) {
+        query += ` AND p.bud = $${paramIndex}`;
+        params.push(bud);
+        paramIndex++;
+      }
+      if (quarter) {
+        query += ` AND p.quarter = $${paramIndex}`;
+        params.push(quarter);
+        paramIndex++;
+      }
+      if (project) {
+        query += ` AND p.project_code = $${paramIndex}`;
+        params.push(project);
+        paramIndex++;
+      }
+
+      query += ' GROUP BY p.quarter ORDER BY p.quarter';
+
+      const result = await pool.query(query, params);
+      return res.json(result.rows);
+    }
+
+    // No VP/MGR filter - use simple query
+    let query = `
+      SELECT
+        p.quarter,
+        COUNT(DISTINCT p.project_code) as project_count,
+        SUM(COALESCE(NULLIF(p.mkt_expense_actual, '-'), '0')::numeric) as total_mkt_expense,
+        SUM(COALESCE(NULLIF(p.total_lead, '-'), '0')::numeric) as total_lead,
+        SUM(COALESCE(NULLIF(p.quality_lead, '-'), '0')::numeric) as total_quality_lead,
+        SUM(COALESCE(NULLIF(p.lead_new_rem_walk, '-'), '0')::numeric) as total_walk,
+        SUM(COALESCE(NULLIF(p.lead_new_rem_book, '-'), '0')::numeric) as total_book,
+        SUM(COALESCE(NULLIF(p.booking_actual, '-'), '0')::numeric) as total_booking,
+        SUM(COALESCE(NULLIF(p.presale_target, '-'), '0')::numeric) as total_presale_target,
+        SUM(COALESCE(NULLIF(p.presale_actual, '-'), '0')::numeric) + SUM(COALESCE(NULLIF(p.livnex_actual, '-'), '0')::numeric) as total_presale_livnex,
+        SUM(COALESCE(NULLIF(p.revenue_target, '-'), '0')::numeric) as total_revenue_target,
+        SUM(COALESCE(NULLIF(p.revenue_actual, '-'), '0')::numeric) as total_revenue,
+        AVG(COALESCE(NULLIF(p.cpl, '-'), '0')::numeric) as avg_cpl,
+        AVG(COALESCE(NULLIF(p.cpql, '-'), '0')::numeric) as avg_cpql,
+        AVG(COALESCE(NULLIF(p.mkt_pct_booking, '-'), '0')::numeric) as avg_mkt_pct_booking,
+        AVG(COALESCE(NULLIF(p.mkt_pct_presale_livnex, '-'), '0')::numeric) as avg_mkt_pct_presale_livnex,
+        AVG(COALESCE(NULLIF(p.mkt_pct_revenue, '-'), '0')::numeric) as avg_mkt_pct_revenue
+      FROM "Performance2025" p
+      WHERE 1=1
+    `;
+    const params = [];
+    let paramIndex = 1;
+
+    if (bud) {
+      query += ` AND p.bud = $${paramIndex}`;
+      params.push(bud);
+      paramIndex++;
+    }
+    if (quarter) {
+      query += ` AND p.quarter = $${paramIndex}`;
+      params.push(quarter);
+      paramIndex++;
+    }
+    if (project) {
+      query += ` AND p.project_code = $${paramIndex}`;
+      params.push(project);
+      paramIndex++;
+    }
+
+    query += ' GROUP BY p.quarter ORDER BY p.quarter';
+
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching marketing summary:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Marketing Performance - Project Detail Data
+app.get('/api/sales-2025/marketing-projects', async (req, res) => {
+  try {
+    const { vp, mgr, bud, quarter, project } = req.query;
+
+    // If VP or MGR filter is applied, we need to filter by their responsible quarters
+    if (vp || mgr) {
+      const personName = vp || mgr;
+      const roleType = vp ? 'VP' : 'MGR';
+
+      // Get project-month mapping for this person
+      const mappingResult = await pool.query(`
+        SELECT project_code, month FROM "Project_User_Mapping"
+        WHERE department = 'Sale' AND role_type = $1 AND name = $2
+      `, [roleType, personName]);
+
+      // Group by project and get quarters
+      const projectQuarters = {};
+      mappingResult.rows.forEach(row => {
+        if (!projectQuarters[row.project_code]) {
+          projectQuarters[row.project_code] = new Set();
+        }
+        const q = monthToQuarter(row.month);
+        if (q) projectQuarters[row.project_code].add(q);
+      });
+
+      // Build conditions for (project_code, quarter) pairs
+      const conditions = [];
+      const params = [];
+      let paramIndex = 1;
+
+      for (const [projCode, quarters] of Object.entries(projectQuarters)) {
+        const quarterArray = Array.from(quarters);
+        conditions.push(`(p.project_code = $${paramIndex} AND p.quarter = ANY($${paramIndex + 1}))`);
+        params.push(projCode);
+        params.push(quarterArray);
+        paramIndex += 2;
+      }
+
+      if (conditions.length === 0) {
+        return res.json([]);
+      }
+
+      let query = `
+        SELECT
+          p.project_code,
+          p.project_name,
+          p.bud,
+          p.quarter,
+          COALESCE(NULLIF(p.mkt_expense_actual, '-'), '0')::numeric as mkt_expense,
+          COALESCE(NULLIF(p.total_lead, '-'), '0')::numeric as total_lead,
+          COALESCE(NULLIF(p.quality_lead, '-'), '0')::numeric as quality_lead,
+          COALESCE(NULLIF(p.booking_actual, '-'), '0')::numeric as booking,
+          COALESCE(NULLIF(p.presale_actual, '-'), '0')::numeric + COALESCE(NULLIF(p.livnex_actual, '-'), '0')::numeric as presale_livnex,
+          COALESCE(NULLIF(p.revenue_actual, '-'), '0')::numeric as revenue,
+          COALESCE(NULLIF(p.cpl, '-'), '0')::numeric as cpl,
+          COALESCE(NULLIF(p.cpql, '-'), '0')::numeric as cpql,
+          COALESCE(NULLIF(p.mkt_pct_booking, '-'), '0')::numeric as mkt_pct_booking,
+          COALESCE(NULLIF(p.mkt_pct_presale_livnex, '-'), '0')::numeric as mkt_pct_presale_livnex,
+          COALESCE(NULLIF(p.mkt_pct_revenue, '-'), '0')::numeric as mkt_pct_revenue
+        FROM "Performance2025" p
+        WHERE (${conditions.join(' OR ')})
+      `;
+
+      if (bud) {
+        query += ` AND p.bud = $${paramIndex}`;
+        params.push(bud);
+        paramIndex++;
+      }
+      if (quarter) {
+        query += ` AND p.quarter = $${paramIndex}`;
+        params.push(quarter);
+        paramIndex++;
+      }
+      if (project) {
+        query += ` AND p.project_code = $${paramIndex}`;
+        params.push(project);
+        paramIndex++;
+      }
+
+      query += ' ORDER BY p.quarter, p.project_code';
+
+      const result = await pool.query(query, params);
+      return res.json(result.rows);
+    }
+
+    // No VP/MGR filter - use simple query
+    let query = `
+      SELECT
+        p.project_code,
+        p.project_name,
+        p.bud,
+        p.quarter,
+        COALESCE(NULLIF(p.mkt_expense_actual, '-'), '0')::numeric as mkt_expense,
+        COALESCE(NULLIF(p.total_lead, '-'), '0')::numeric as total_lead,
+        COALESCE(NULLIF(p.quality_lead, '-'), '0')::numeric as quality_lead,
+        COALESCE(NULLIF(p.booking_actual, '-'), '0')::numeric as booking,
+        COALESCE(NULLIF(p.presale_actual, '-'), '0')::numeric + COALESCE(NULLIF(p.livnex_actual, '-'), '0')::numeric as presale_livnex,
+        COALESCE(NULLIF(p.revenue_actual, '-'), '0')::numeric as revenue,
+        COALESCE(NULLIF(p.cpl, '-'), '0')::numeric as cpl,
+        COALESCE(NULLIF(p.cpql, '-'), '0')::numeric as cpql,
+        COALESCE(NULLIF(p.mkt_pct_booking, '-'), '0')::numeric as mkt_pct_booking,
+        COALESCE(NULLIF(p.mkt_pct_presale_livnex, '-'), '0')::numeric as mkt_pct_presale_livnex,
+        COALESCE(NULLIF(p.mkt_pct_revenue, '-'), '0')::numeric as mkt_pct_revenue
+      FROM "Performance2025" p
+      WHERE 1=1
+    `;
+    const params = [];
+    let paramIndex = 1;
+
+    if (bud) {
+      query += ` AND p.bud = $${paramIndex}`;
+      params.push(bud);
+      paramIndex++;
+    }
+    if (quarter) {
+      query += ` AND p.quarter = $${paramIndex}`;
+      params.push(quarter);
+      paramIndex++;
+    }
+    if (project) {
+      query += ` AND p.project_code = $${paramIndex}`;
+      params.push(project);
+      paramIndex++;
+    }
+
+    query += ' ORDER BY p.quarter, p.project_code';
+
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching marketing projects:', err);
     res.status(500).json({ error: err.message });
   }
 });
