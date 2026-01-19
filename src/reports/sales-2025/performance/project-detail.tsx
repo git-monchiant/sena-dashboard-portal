@@ -165,18 +165,37 @@ export function ProjectDetailPage() {
     'Booking': Number(d.booking_actual),
   }));
 
-  // Lead Funnel chart data
-  const leadFunnelData = data.map(d => ({
-    quarter: d.quarter,
-    'Total Lead': Number(d.total_lead || 0),
-    'Quality Lead': Number(d.quality_lead || 0),
-    'Walk': Number(d.walk || 0),
-    'Book': Number(d.book || 0),
-  }));
+  // Lead Funnel chart data with ratios
+  const leadFunnelData = data.map(d => {
+    const totalLead = Number(d.total_lead || 0);
+    const qualityLead = Number(d.quality_lead || 0);
+    const walk = Number(d.walk || 0);
+    const book = Number(d.book || 0);
+    const leadToQLPct = totalLead > 0 ? ((qualityLead / totalLead) * 100).toFixed(1) : '0';
+    const qlToWalkPct = qualityLead > 0 ? ((walk / qualityLead) * 100).toFixed(1) : '0';
+    const walkToBookPct = walk > 0 ? ((book / walk) * 100).toFixed(1) : '0';
+    const leadToQLRatio = qualityLead > 0 ? (totalLead / qualityLead).toFixed(1) : '-';
+    const qlToWalkRatio = walk > 0 ? (qualityLead / walk).toFixed(1) : '-';
+    const walkToBookRatio = book > 0 ? (walk / book).toFixed(1) : '-';
+    return {
+      quarter: d.quarter,
+      'Total Lead': totalLead,
+      'Quality Lead': qualityLead,
+      'Walk': walk,
+      'Book': book,
+      'Lead to QL %': leadToQLPct,
+      'QL to Walk %': qlToWalkPct,
+      'Walk to Book %': walkToBookPct,
+      'Lead to QL Ratio': leadToQLRatio,
+      'QL to Walk Ratio': qlToWalkRatio,
+      'Walk to Book Ratio': walkToBookRatio,
+    };
+  });
 
   // Split team by role
   const vpTeam = team.filter(t => t.roleType === 'VP');
   const mgrTeam = team.filter(t => t.roleType === 'MGR');
+  const mktTeam = team.filter(t => t.roleType === 'MKT');
 
   return (
     <div className="min-h-screen">
@@ -288,7 +307,7 @@ export function ProjectDetailPage() {
             <div className="mb-6">
               <div className="flex items-center gap-2 mb-3">
                 <UserCheck className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-semibold text-slate-700">VP (หัวหน้า)</span>
+                <span className="text-sm font-semibold text-slate-700">BUD-Head (หัวหน้า)</span>
               </div>
               {vpTeam.length === 0 ? (
                 <p className="text-sm text-slate-400 ml-6">ไม่มีข้อมูล</p>
@@ -313,10 +332,10 @@ export function ProjectDetailPage() {
             </div>
 
             {/* MGR Section */}
-            <div>
+            <div className="mb-6">
               <div className="flex items-center gap-2 mb-3">
                 <Users className="w-4 h-4 text-emerald-600" />
-                <span className="text-sm font-semibold text-slate-700">MGR (ผู้จัดการ)</span>
+                <span className="text-sm font-semibold text-slate-700">MGR-Sale (ผู้จัดการขาย)</span>
               </div>
               {mgrTeam.length === 0 ? (
                 <p className="text-sm text-slate-400 ml-6">ไม่มีข้อมูล</p>
@@ -339,6 +358,34 @@ export function ProjectDetailPage() {
                 </div>
               )}
             </div>
+
+            {/* MKT Section */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Megaphone className="w-4 h-4 text-orange-600" />
+                <span className="text-sm font-semibold text-slate-700">MGR-Marketing (ผู้จัดการการตลาด)</span>
+              </div>
+              {mktTeam.length === 0 ? (
+                <p className="text-sm text-slate-400 ml-6">ไม่มีข้อมูล</p>
+              ) : (
+                <div className="space-y-2 ml-6">
+                  {mktTeam.map((member, idx) => (
+                    <div key={idx} className="flex items-start justify-between p-3 bg-orange-50 rounded-lg">
+                      <div>
+                        <div className="font-medium text-slate-800">{member.name}</div>
+                        <div className="text-xs text-slate-500">{member.position}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs text-slate-500">เดือนที่รับผิดชอบ</div>
+                        <div className="text-sm font-medium text-orange-600">
+                          {member.months.join(', ')}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -353,8 +400,8 @@ export function ProjectDetailPage() {
               </div>
               <p className="text-sm text-slate-500">Total Lead → Quality Lead → Walk → Book</p>
             </div>
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={leadFunnelData}>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={leadFunnelData} margin={{ top: 25, right: 5, left: 5, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="quarter" stroke="#64748b" fontSize={12} />
                 <YAxis stroke="#64748b" fontSize={12} />
@@ -368,6 +415,13 @@ export function ProjectDetailPage() {
                       'Walk': '#10b981',
                       'Book': '#3b82f6',
                     };
+                    const data = payload[0]?.payload;
+                    const leadToQLRatio = data?.['Lead to QL Ratio'] || '-';
+                    const qlToWalkRatio = data?.['QL to Walk Ratio'] || '-';
+                    const walkToBookRatio = data?.['Walk to Book Ratio'] || '-';
+                    const leadToQLPct = data?.['Lead to QL %'] || '0';
+                    const qlToWalkPct = data?.['QL to Walk %'] || '0';
+                    const walkToBookPct = data?.['Walk to Book %'] || '0';
                     return (
                       <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-lg">
                         <p className="font-medium text-slate-700 mb-2">{label}</p>
@@ -382,6 +436,12 @@ export function ProjectDetailPage() {
                             </div>
                           );
                         })}
+                        <hr className="my-2 border-slate-200" />
+                        <div className="text-xs text-slate-500 space-y-1">
+                          <div>Lead→QL: <span className="font-medium text-slate-700">{leadToQLRatio}:1</span> ({leadToQLPct}%)</div>
+                          <div>QL→Walk: <span className="font-medium text-slate-700">{qlToWalkRatio}:1</span> ({qlToWalkPct}%)</div>
+                          <div>Walk→Book: <span className="font-medium text-slate-700">{walkToBookRatio}:1</span> ({walkToBookPct}%)</div>
+                        </div>
                       </div>
                     );
                   }}
@@ -408,10 +468,63 @@ export function ProjectDetailPage() {
                     </div>
                   )}
                 />
-                <Bar dataKey="Total Lead" fill="#64748b" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Quality Lead" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Walk" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Book" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Total Lead" fill="#64748b" radius={[4, 4, 0, 0]}>
+                  <LabelList dataKey="Total Lead" position="top" fontSize={10} fill="#475569" formatter={(v) => Number(v).toLocaleString()} />
+                </Bar>
+                <Bar dataKey="Quality Lead" fill="#8b5cf6" radius={[4, 4, 0, 0]}>
+                  <LabelList
+                    position="top"
+                    fontSize={9}
+                    fill="#7c3aed"
+                    content={(props) => {
+                      const { x, y, width, index } = props as { x?: number | string; y?: number | string; width?: number | string; index?: number };
+                      const qlValue = typeof index === 'number' ? leadFunnelData[index]?.['Quality Lead'] : 0;
+                      const ratio = typeof index === 'number' ? leadFunnelData[index]?.['Lead to QL Ratio'] : '-';
+                      const pct = typeof index === 'number' ? leadFunnelData[index]?.['Lead to QL %'] : '0';
+                      return (
+                        <text x={Number(x || 0) + Number(width || 0) / 2} y={Number(y || 0) - 5} textAnchor="middle" fontSize={9} fill="#7c3aed">
+                          {qlValue.toLocaleString()} ({ratio}:1 / {pct}%)
+                        </text>
+                      );
+                    }}
+                  />
+                </Bar>
+                <Bar dataKey="Walk" fill="#10b981" radius={[4, 4, 0, 0]}>
+                  <LabelList
+                    position="top"
+                    fontSize={9}
+                    fill="#059669"
+                    content={(props) => {
+                      const { x, y, width, index } = props as { x?: number | string; y?: number | string; width?: number | string; index?: number };
+                      const walkValue = typeof index === 'number' ? leadFunnelData[index]?.['Walk'] : 0;
+                      const ratio = typeof index === 'number' ? leadFunnelData[index]?.['QL to Walk Ratio'] : '-';
+                      const pct = typeof index === 'number' ? leadFunnelData[index]?.['QL to Walk %'] : '0';
+                      return (
+                        <text x={Number(x || 0) + Number(width || 0) / 2} y={Number(y || 0) - 5} textAnchor="middle" fontSize={9} fill="#059669">
+                          {walkValue.toLocaleString()} ({ratio}:1 / {pct}%)
+                        </text>
+                      );
+                    }}
+                  />
+                </Bar>
+                <Bar dataKey="Book" fill="#3b82f6" radius={[4, 4, 0, 0]}>
+                  <LabelList
+                    position="top"
+                    fontSize={9}
+                    fill="#2563eb"
+                    content={(props) => {
+                      const { x, y, width, index } = props as { x?: number | string; y?: number | string; width?: number | string; index?: number };
+                      const bookValue = typeof index === 'number' ? leadFunnelData[index]?.['Book'] : 0;
+                      const ratio = typeof index === 'number' ? leadFunnelData[index]?.['Walk to Book Ratio'] : '-';
+                      const pct = typeof index === 'number' ? leadFunnelData[index]?.['Walk to Book %'] : '0';
+                      return (
+                        <text x={Number(x || 0) + Number(width || 0) / 2} y={Number(y || 0) - 5} textAnchor="middle" fontSize={9} fill="#2563eb">
+                          {bookValue.toLocaleString()} ({ratio}:1 / {pct}%)
+                        </text>
+                      );
+                    }}
+                  />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -437,7 +550,7 @@ export function ProjectDetailPage() {
                   </div>
                   <div>
                     <div className="text-xl font-bold text-purple-600">{totalQualityLead.toLocaleString()}</div>
-                    <div className="text-xs text-slate-500">Quality Lead</div>
+                    <div className="text-xs text-slate-500">Q.Lead</div>
                   </div>
                   <div>
                     <div className="text-xl font-bold text-emerald-600">{totalWalk.toLocaleString()}</div>
@@ -527,7 +640,7 @@ export function ProjectDetailPage() {
                     <td className="py-3 px-4 text-right">
                       <span className={`px-2 py-1 rounded text-xs font-medium ${
                         row.presale_achieve_pct >= 0.8 ? 'bg-emerald-100 text-emerald-700' :
-                        row.presale_achieve_pct >= 0.5 ? 'bg-yellow-100 text-yellow-700' :
+                        row.presale_achieve_pct >= 0.6 ? 'bg-amber-100 text-amber-700' :
                         'bg-red-100 text-red-700'
                       }`}>
                         {(row.presale_achieve_pct * 100).toFixed(1)}%
@@ -538,7 +651,7 @@ export function ProjectDetailPage() {
                     <td className="py-3 px-4 text-right">
                       <span className={`px-2 py-1 rounded text-xs font-medium ${
                         row.revenue_achieve_pct >= 0.8 ? 'bg-emerald-100 text-emerald-700' :
-                        row.revenue_achieve_pct >= 0.5 ? 'bg-yellow-100 text-yellow-700' :
+                        row.revenue_achieve_pct >= 0.6 ? 'bg-amber-100 text-amber-700' :
                         'bg-red-100 text-red-700'
                       }`}>
                         {(row.revenue_achieve_pct * 100).toFixed(1)}%

@@ -23,6 +23,7 @@ import {
   EmployeeListPage,
   EmployeeDetailPage,
   MarketingPerformancePage,
+  VPDetailPage,
 } from '@/reports';
 
 function App() {
@@ -41,6 +42,7 @@ function App() {
             <Route path="sales-2025/project/:projectCode" element={<ProjectDetailPage />} />
             <Route path="sales-2025/employees" element={<EmployeeListPage />} />
             <Route path="sales-2025/employee/:name" element={<EmployeeDetailPage />} />
+            <Route path="sales-2025/vp/:name" element={<VPDetailPage />} />
 
             {/* Sales Module */}
             <Route path="sales" element={<SalesOverviewPage />} />

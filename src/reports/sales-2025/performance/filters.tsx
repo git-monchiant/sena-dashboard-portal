@@ -248,9 +248,9 @@ export function SalesPerformanceFilters({ onApply, initialFilters }: Props) {
           />
         </div>
 
-        {/* VP Filter */}
+        {/* BUD-Head Filter */}
         <div>
-          <label className="block text-sm font-medium text-slate-600 mb-1">VP</label>
+          <label className="block text-sm font-medium text-slate-600 mb-1">BUD-Head</label>
           <SearchableSelect
             value={filters.vp}
             onChange={(val) => handleChange('vp', val)}
@@ -259,9 +259,9 @@ export function SalesPerformanceFilters({ onApply, initialFilters }: Props) {
           />
         </div>
 
-        {/* MGR Filter */}
+        {/* MGR-Sale Filter */}
         <div>
-          <label className="block text-sm font-medium text-slate-600 mb-1">MGR</label>
+          <label className="block text-sm font-medium text-slate-600 mb-1">MGR-Sale</label>
           <SearchableSelect
             value={filters.mgr}
             onChange={(val) => handleChange('mgr', val)}

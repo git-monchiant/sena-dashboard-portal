@@ -1,13 +1,14 @@
 import { TrendingUp, TrendingDown, LucideIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-type ColorVariant = 'emerald' | 'blue' | 'purple' | 'orange' | 'amber' | 'red';
+type ColorVariant = 'emerald' | 'blue' | 'purple' | 'orange' | 'amber' | 'red' | 'slate';
 
 interface KPICardProps {
   title: string;
   value: string | number;
   change?: string;
-  changeType?: 'positive' | 'negative' | 'neutral';
+  changeType?: 'positive' | 'negative' | 'warning' | 'neutral';
+  showArrow?: boolean;
   target?: {
     percentage: number;
   };
@@ -25,6 +26,7 @@ const colorClasses: Record<ColorVariant, string> = {
   orange: 'bg-orange-100 text-orange-600',
   amber: 'bg-amber-100 text-amber-600',
   red: 'bg-red-100 text-red-600',
+  slate: 'bg-slate-100 text-slate-600',
 };
 
 export function KPICard({
@@ -32,6 +34,7 @@ export function KPICard({
   value,
   change,
   changeType = 'neutral',
+  showArrow = true,
   target,
   subtext,
   icon: Icon,
@@ -63,13 +66,17 @@ export function KPICard({
         {change && (
           <div
             className={`flex items-center gap-1 text-sm font-medium ${
+              changeType === 'neutral' ? 'text-slate-500' :
+              changeType === 'warning' ? 'text-amber-600' :
               isPositive ? 'text-emerald-600' : 'text-red-500'
             }`}
           >
-            {isPositive ? (
-              <TrendingUp className="w-4 h-4" />
-            ) : (
-              <TrendingDown className="w-4 h-4" />
+            {showArrow && changeType !== 'neutral' && (
+              isPositive ? (
+                <TrendingUp className="w-4 h-4" />
+              ) : (
+                <TrendingDown className="w-4 h-4" />
+              )
             )}
             {change}
           </div>
@@ -85,7 +92,7 @@ export function KPICard({
               style={{ width: `${Math.min(100, target.percentage)}%` }}
             />
           </div>
-          <span className="text-xs text-slate-500">{target.percentage}%</span>
+          <span className="text-xs text-slate-500">{target.percentage.toFixed(2)}%</span>
         </div>
       )}
       {subtext && <p className="text-xs text-slate-400 mt-1">{subtext}</p>}

@@ -224,17 +224,23 @@ app.get('/api/sales-2025/team/:projectCode', async (req, res) => {
     const result = await pool.query(`
       SELECT department, role_type, position, name, month
       FROM "Project_User_Mapping"
-      WHERE project_code = $1 AND department = 'Sale'
-      ORDER BY role_type DESC, name
+      WHERE project_code = $1 AND department IN ('Sale', 'Mkt')
+      ORDER BY department, role_type DESC, name
     `, [projectCode]);
 
     // Group by person
     const grouped = {};
     result.rows.forEach(row => {
-      const key = `${row.role_type}|${row.name}|${row.position}`;
+      // For Marketing department: only include MGR level, skip VP
+      if (row.department === 'Mkt' && row.role_type === 'VP') {
+        return; // Skip VP from Marketing
+      }
+      // For Marketing department, use 'MKT' as roleType
+      const roleType = row.department === 'Mkt' ? 'MKT' : row.role_type;
+      const key = `${roleType}|${row.name}|${row.position}`;
       if (!grouped[key]) {
         grouped[key] = {
-          roleType: row.role_type,
+          roleType: roleType,
           name: row.name,
           position: row.position,
           months: [],
@@ -675,32 +681,89 @@ function monthToQuarter(month) {
   return null;
 }
 
-// Get employee performance summary (by VP or MGR)
+// Get employee performance summary (by VP or MGR) - OPTIMIZED with batch queries
 app.get('/api/sales-2025/employees', async (req, res) => {
   try {
-    const { roleType = 'VP' } = req.query;
+    const { roleType = 'VP', department = 'Sale', all } = req.query;
 
-    // Get all employees with their projects
-    const employeesResult = await pool.query(`
-      SELECT DISTINCT name, position, role_type
+    // Query 1: Get all employees
+    let employeesResult;
+    if (all === 'true') {
+      employeesResult = await pool.query(`
+        SELECT DISTINCT name, position, role_type, department
+        FROM "Project_User_Mapping"
+        WHERE (department = 'Sale' AND role_type IN ('VP', 'MGR'))
+           OR (department = 'Mkt' AND role_type = 'MGR')
+        ORDER BY role_type, department, name
+      `);
+    } else {
+      employeesResult = await pool.query(`
+        SELECT DISTINCT name, position, role_type, department
+        FROM "Project_User_Mapping"
+        WHERE department = $1 AND role_type = $2
+        ORDER BY name
+      `, [department, roleType]);
+    }
+
+    // Query 2: Get ALL project mappings for all relevant employees at once
+    const allMappingsResult = await pool.query(`
+      SELECT name, department, project_code, month
       FROM "Project_User_Mapping"
-      WHERE department = 'Sale' AND role_type = $1
-      ORDER BY name
-    `, [roleType]);
+      WHERE (department = 'Sale' AND role_type IN ('VP', 'MGR'))
+         OR (department = 'Mkt' AND role_type = 'MGR')
+    `);
 
+    // Build mapping: employee -> projects -> quarters
+    const employeeProjectMap = {};
+    allMappingsResult.rows.forEach(row => {
+      const key = `${row.name}|${row.department}`;
+      if (!employeeProjectMap[key]) {
+        employeeProjectMap[key] = {};
+      }
+      if (!employeeProjectMap[key][row.project_code]) {
+        employeeProjectMap[key][row.project_code] = new Set();
+      }
+      const quarter = monthToQuarter(row.month);
+      if (quarter) employeeProjectMap[key][row.project_code].add(quarter);
+    });
+
+    // Query 3: Get ALL performance data at once
+    const allPerfResult = await pool.query(`
+      SELECT
+        project_code,
+        quarter,
+        bud,
+        COALESCE(NULLIF(presale_target, '-'), '0')::numeric as presale_target,
+        COALESCE(NULLIF(presale_actual, '-'), '0')::numeric as presale_actual,
+        COALESCE(NULLIF(revenue_target, '-'), '0')::numeric as revenue_target,
+        COALESCE(NULLIF(revenue_actual, '-'), '0')::numeric as revenue_actual
+      FROM "Performance2025"
+    `);
+
+    // Build performance lookup: project_code -> quarter -> data
+    const perfLookup = {};
+    allPerfResult.rows.forEach(row => {
+      const key = `${row.project_code}|${row.quarter}`;
+      if (!perfLookup[key]) {
+        perfLookup[key] = [];
+      }
+      perfLookup[key].push(row);
+    });
+
+    // Process each employee using in-memory data
     const employees = [];
     for (const emp of employeesResult.rows) {
-      // Get all projects and months for this employee
-      const projectsResult = await pool.query(`
-        SELECT project_code, month FROM "Project_User_Mapping"
-        WHERE department = 'Sale' AND name = $1
-      `, [emp.name]);
+      const empDept = emp.department || department;
+      const empKey = `${emp.name}|${empDept}`;
+      const projectQuarters = employeeProjectMap[empKey] || {};
 
-      if (projectsResult.rows.length === 0) {
+      if (Object.keys(projectQuarters).length === 0) {
         employees.push({
           name: emp.name,
           position: emp.position,
           roleType: emp.role_type,
+          department: empDept,
+          buds: [],
           projectCount: 0,
           totalPresaleTarget: 0,
           totalPresaleActual: 0,
@@ -712,39 +775,23 @@ app.get('/api/sales-2025/employees', async (req, res) => {
         continue;
       }
 
-      // Group by project and get quarters
-      const projectQuarters = {};
-      projectsResult.rows.forEach(row => {
-        if (!projectQuarters[row.project_code]) {
-          projectQuarters[row.project_code] = new Set();
-        }
-        const quarter = monthToQuarter(row.month);
-        if (quarter) projectQuarters[row.project_code].add(quarter);
-      });
-
-      // Get performance data filtered by responsible quarters
       let totalPresaleTarget = 0;
       let totalPresaleActual = 0;
       let totalRevenueTarget = 0;
       let totalRevenueActual = 0;
+      const budSet = new Set();
 
       for (const [projectCode, quarters] of Object.entries(projectQuarters)) {
-        const quarterArray = Array.from(quarters);
-        const perfResult = await pool.query(`
-          SELECT
-            SUM(COALESCE(NULLIF(presale_target, '-'), '0')::numeric) as presale_target,
-            SUM(COALESCE(NULLIF(presale_actual, '-'), '0')::numeric) as presale_actual,
-            SUM(COALESCE(NULLIF(revenue_target, '-'), '0')::numeric) as revenue_target,
-            SUM(COALESCE(NULLIF(revenue_actual, '-'), '0')::numeric) as revenue_actual
-          FROM "Performance2025"
-          WHERE project_code = $1 AND quarter = ANY($2)
-        `, [projectCode, quarterArray]);
-
-        if (perfResult.rows[0]) {
-          totalPresaleTarget += parseFloat(perfResult.rows[0].presale_target) || 0;
-          totalPresaleActual += parseFloat(perfResult.rows[0].presale_actual) || 0;
-          totalRevenueTarget += parseFloat(perfResult.rows[0].revenue_target) || 0;
-          totalRevenueActual += parseFloat(perfResult.rows[0].revenue_actual) || 0;
+        for (const quarter of quarters) {
+          const key = `${projectCode}|${quarter}`;
+          const perfRows = perfLookup[key] || [];
+          perfRows.forEach(row => {
+            if (row.bud) budSet.add(row.bud);
+            totalPresaleTarget += parseFloat(row.presale_target) || 0;
+            totalPresaleActual += parseFloat(row.presale_actual) || 0;
+            totalRevenueTarget += parseFloat(row.revenue_target) || 0;
+            totalRevenueActual += parseFloat(row.revenue_actual) || 0;
+          });
         }
       }
 
@@ -755,6 +802,8 @@ app.get('/api/sales-2025/employees', async (req, res) => {
         name: emp.name,
         position: emp.position,
         roleType: emp.role_type,
+        department: empDept,
+        buds: Array.from(budSet).sort(),
         projectCount: Object.keys(projectQuarters).length,
         totalPresaleTarget,
         totalPresaleActual,
@@ -765,24 +814,27 @@ app.get('/api/sales-2025/employees', async (req, res) => {
       });
     }
 
-    res.json(employees);
+    // Get unique BUD list for filter
+    const allBuds = [...new Set(employees.flatMap(e => e.buds || []))].sort();
+
+    res.json({ employees, budList: allBuds });
   } catch (err) {
     console.error('Error fetching employees:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// Get employee detail with projects
+// Get employee detail with projects (Sales + Marketing MGR)
 app.get('/api/sales-2025/employee/:name', async (req, res) => {
   try {
     const { name } = req.params;
     const monthOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-    // Get employee info
+    // Get employee info (check both Sale and Mkt departments)
     const empResult = await pool.query(`
-      SELECT DISTINCT name, position, role_type
+      SELECT DISTINCT name, position, role_type, department
       FROM "Project_User_Mapping"
-      WHERE department = 'Sale' AND name = $1
+      WHERE name = $1 AND role_type = 'MGR'
       LIMIT 1
     `, [name]);
 
@@ -796,7 +848,7 @@ app.get('/api/sales-2025/employee/:name', async (req, res) => {
     const projectsResult = await pool.query(`
       SELECT project_code, project_name, month
       FROM "Project_User_Mapping"
-      WHERE department = 'Sale' AND name = $1
+      WHERE name = $1 AND role_type = 'MGR'
       ORDER BY project_code
     `, [name]);
 
@@ -813,6 +865,21 @@ app.get('/api/sales-2025/employee/:name', async (req, res) => {
       projectMap[row.project_code].months.push(row.month);
     });
 
+    // Grand totals for KPI cards
+    let grandTotals = {
+      presaleTarget: 0,
+      presaleActual: 0,
+      revenueTarget: 0,
+      revenueActual: 0,
+      mktExpense: 0,
+      totalLead: 0,
+      qualityLead: 0,
+      walk: 0,
+      book: 0,
+      booking: 0,
+      livnex: 0,
+    };
+
     // Sort months and get performance (filtered by responsible quarters)
     const projects = [];
     for (const [code, proj] of Object.entries(projectMap)) {
@@ -821,36 +888,342 @@ app.get('/api/sales-2025/employee/:name', async (req, res) => {
       // Convert months to quarters for this project
       const responsibleQuarters = [...new Set(proj.months.map(m => monthToQuarter(m)).filter(q => q))];
 
-      // Get performance for this project ONLY for responsible quarters
+      // Get full performance for this project including marketing metrics
       const perfResult = await pool.query(`
         SELECT
           quarter,
+          bud,
           COALESCE(NULLIF(presale_target, '-'), '0')::numeric as presale_target,
           COALESCE(NULLIF(presale_actual, '-'), '0')::numeric as presale_actual,
           COALESCE(NULLIF(presale_achieve_pct, '-'), '0')::numeric as presale_achieve_pct,
           COALESCE(NULLIF(revenue_target, '-'), '0')::numeric as revenue_target,
           COALESCE(NULLIF(revenue_actual, '-'), '0')::numeric as revenue_actual,
-          COALESCE(NULLIF(revenue_achieve_pct, '-'), '0')::numeric as revenue_achieve_pct
+          COALESCE(NULLIF(revenue_achieve_pct, '-'), '0')::numeric as revenue_achieve_pct,
+          COALESCE(NULLIF(mkt_expense_actual, '-'), '0')::numeric as mkt_expense,
+          COALESCE(NULLIF(total_lead, '-'), '0')::numeric as total_lead,
+          COALESCE(NULLIF(quality_lead, '-'), '0')::numeric as quality_lead,
+          COALESCE(NULLIF(lead_new_rem_walk, '-'), '0')::numeric as walk,
+          COALESCE(NULLIF(lead_new_rem_book, '-'), '0')::numeric as book,
+          COALESCE(NULLIF(booking_actual, '-'), '0')::numeric as booking,
+          COALESCE(NULLIF(livnex_actual, '-'), '0')::numeric as livnex
         FROM "Performance2025"
         WHERE project_code = $1 AND quarter = ANY($2)
         ORDER BY quarter
       `, [code, responsibleQuarters]);
 
+      // Aggregate to grand totals
+      perfResult.rows.forEach(row => {
+        grandTotals.presaleTarget += parseFloat(row.presale_target) || 0;
+        grandTotals.presaleActual += parseFloat(row.presale_actual) || 0;
+        grandTotals.revenueTarget += parseFloat(row.revenue_target) || 0;
+        grandTotals.revenueActual += parseFloat(row.revenue_actual) || 0;
+        grandTotals.mktExpense += parseFloat(row.mkt_expense) || 0;
+        grandTotals.totalLead += parseFloat(row.total_lead) || 0;
+        grandTotals.qualityLead += parseFloat(row.quality_lead) || 0;
+        grandTotals.walk += parseFloat(row.walk) || 0;
+        grandTotals.book += parseFloat(row.book) || 0;
+        grandTotals.booking += parseFloat(row.booking) || 0;
+        grandTotals.livnex += parseFloat(row.livnex) || 0;
+      });
+
       projects.push({
         ...proj,
+        bud: perfResult.rows[0]?.bud || '',
         responsibleQuarters,
         performance: perfResult.rows,
       });
     }
 
+    // Calculate KPIs
+    const kpis = {
+      presaleAchievePct: grandTotals.presaleTarget > 0 ? (grandTotals.presaleActual / grandTotals.presaleTarget) * 100 : 0,
+      revenueAchievePct: grandTotals.revenueTarget > 0 ? (grandTotals.revenueActual / grandTotals.revenueTarget) * 100 : 0,
+      avgCPL: grandTotals.totalLead > 0 ? grandTotals.mktExpense / grandTotals.totalLead : 0,
+      avgCPQL: grandTotals.qualityLead > 0 ? grandTotals.mktExpense / grandTotals.qualityLead : 0,
+      leadToQLRatio: grandTotals.qualityLead > 0 ? grandTotals.totalLead / grandTotals.qualityLead : 0,
+      qlToWalkRatio: grandTotals.walk > 0 ? grandTotals.qualityLead / grandTotals.walk : 0,
+      walkToBookRatio: grandTotals.book > 0 ? grandTotals.walk / grandTotals.book : 0,
+      mktPctBooking: grandTotals.booking > 0 ? (grandTotals.mktExpense / grandTotals.booking) * 100 : 0,
+    };
+
     res.json({
       name: employee.name,
       position: employee.position,
       roleType: employee.role_type,
+      department: employee.department,
       projects,
+      grandTotals,
+      kpis,
     });
   } catch (err) {
     console.error('Error fetching employee:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get VP detail with combined Sales + Marketing metrics
+app.get('/api/sales-2025/vp/:name', async (req, res) => {
+  try {
+    const { name } = req.params;
+    const monthOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    // Get VP info from Sale department
+    const vpResult = await pool.query(`
+      SELECT DISTINCT name, position, role_type
+      FROM "Project_User_Mapping"
+      WHERE department = 'Sale' AND role_type = 'VP' AND name = $1
+      LIMIT 1
+    `, [name]);
+
+    if (vpResult.rows.length === 0) {
+      return res.status(404).json({ error: 'VP not found' });
+    }
+
+    const vp = vpResult.rows[0];
+
+    // Get all projects with months for this VP
+    const projectsResult = await pool.query(`
+      SELECT project_code, project_name, month
+      FROM "Project_User_Mapping"
+      WHERE department = 'Sale' AND role_type = 'VP' AND name = $1
+      ORDER BY project_code
+    `, [name]);
+
+    // Group by project
+    const projectMap = {};
+    projectsResult.rows.forEach(row => {
+      if (!projectMap[row.project_code]) {
+        projectMap[row.project_code] = {
+          projectCode: row.project_code,
+          projectName: row.project_name,
+          months: [],
+        };
+      }
+      projectMap[row.project_code].months.push(row.month);
+    });
+
+    // Get performance data for each project (filtered by responsible quarters)
+    const projects = [];
+    let grandTotals = {
+      presaleTarget: 0,
+      presaleActual: 0,
+      revenueTarget: 0,
+      revenueActual: 0,
+      mktExpense: 0,
+      totalLead: 0,
+      qualityLead: 0,
+      walk: 0,
+      book: 0,
+      booking: 0,
+      livnex: 0,
+    };
+
+    // Performance by quarter (for charts)
+    const quarterlyPerformance = {};
+
+    for (const [code, proj] of Object.entries(projectMap)) {
+      proj.months = proj.months.sort((a, b) => monthOrder.indexOf(a) - monthOrder.indexOf(b));
+      const responsibleQuarters = [...new Set(proj.months.map(m => monthToQuarter(m)).filter(q => q))];
+
+      // Get combined Sales + Marketing performance
+      const perfResult = await pool.query(`
+        SELECT
+          quarter,
+          bud,
+          COALESCE(NULLIF(presale_target, '-'), '0')::numeric as presale_target,
+          COALESCE(NULLIF(presale_actual, '-'), '0')::numeric as presale_actual,
+          COALESCE(NULLIF(presale_achieve_pct, '-'), '0')::numeric as presale_achieve_pct,
+          COALESCE(NULLIF(revenue_target, '-'), '0')::numeric as revenue_target,
+          COALESCE(NULLIF(revenue_actual, '-'), '0')::numeric as revenue_actual,
+          COALESCE(NULLIF(revenue_achieve_pct, '-'), '0')::numeric as revenue_achieve_pct,
+          COALESCE(NULLIF(mkt_expense_actual, '-'), '0')::numeric as mkt_expense,
+          COALESCE(NULLIF(total_lead, '-'), '0')::numeric as total_lead,
+          COALESCE(NULLIF(quality_lead, '-'), '0')::numeric as quality_lead,
+          COALESCE(NULLIF(lead_new_rem_walk, '-'), '0')::numeric as walk,
+          COALESCE(NULLIF(lead_new_rem_book, '-'), '0')::numeric as book,
+          COALESCE(NULLIF(booking_actual, '-'), '0')::numeric as booking,
+          COALESCE(NULLIF(livnex_actual, '-'), '0')::numeric as livnex,
+          COALESCE(NULLIF(cpl, '-'), '0')::numeric as cpl,
+          COALESCE(NULLIF(cpql, '-'), '0')::numeric as cpql,
+          COALESCE(NULLIF(mkt_pct_booking, '-'), '0')::numeric as mkt_pct_booking
+        FROM "Performance2025"
+        WHERE project_code = $1 AND quarter = ANY($2)
+        ORDER BY quarter
+      `, [code, responsibleQuarters]);
+
+      // Calculate project totals
+      let projectTotals = {
+        presaleTarget: 0,
+        presaleActual: 0,
+        revenueTarget: 0,
+        revenueActual: 0,
+        mktExpense: 0,
+        totalLead: 0,
+        qualityLead: 0,
+        walk: 0,
+        book: 0,
+        booking: 0,
+        livnex: 0,
+      };
+
+      perfResult.rows.forEach(row => {
+        projectTotals.presaleTarget += parseFloat(row.presale_target) || 0;
+        projectTotals.presaleActual += parseFloat(row.presale_actual) || 0;
+        projectTotals.revenueTarget += parseFloat(row.revenue_target) || 0;
+        projectTotals.revenueActual += parseFloat(row.revenue_actual) || 0;
+        projectTotals.mktExpense += parseFloat(row.mkt_expense) || 0;
+        projectTotals.totalLead += parseFloat(row.total_lead) || 0;
+        projectTotals.qualityLead += parseFloat(row.quality_lead) || 0;
+        projectTotals.walk += parseFloat(row.walk) || 0;
+        projectTotals.book += parseFloat(row.book) || 0;
+        projectTotals.booking += parseFloat(row.booking) || 0;
+        projectTotals.livnex += parseFloat(row.livnex) || 0;
+
+        // Add to quarterly performance
+        if (!quarterlyPerformance[row.quarter]) {
+          quarterlyPerformance[row.quarter] = {
+            quarter: row.quarter,
+            presaleTarget: 0,
+            presaleActual: 0,
+            revenueTarget: 0,
+            revenueActual: 0,
+            mktExpense: 0,
+            totalLead: 0,
+            qualityLead: 0,
+            walk: 0,
+            book: 0,
+            booking: 0,
+            livnex: 0,
+          };
+        }
+        quarterlyPerformance[row.quarter].presaleTarget += parseFloat(row.presale_target) || 0;
+        quarterlyPerformance[row.quarter].presaleActual += parseFloat(row.presale_actual) || 0;
+        quarterlyPerformance[row.quarter].revenueTarget += parseFloat(row.revenue_target) || 0;
+        quarterlyPerformance[row.quarter].revenueActual += parseFloat(row.revenue_actual) || 0;
+        quarterlyPerformance[row.quarter].mktExpense += parseFloat(row.mkt_expense) || 0;
+        quarterlyPerformance[row.quarter].totalLead += parseFloat(row.total_lead) || 0;
+        quarterlyPerformance[row.quarter].qualityLead += parseFloat(row.quality_lead) || 0;
+        quarterlyPerformance[row.quarter].walk += parseFloat(row.walk) || 0;
+        quarterlyPerformance[row.quarter].book += parseFloat(row.book) || 0;
+        quarterlyPerformance[row.quarter].booking += parseFloat(row.booking) || 0;
+        quarterlyPerformance[row.quarter].livnex += parseFloat(row.livnex) || 0;
+      });
+
+      // Add to grand totals
+      grandTotals.presaleTarget += projectTotals.presaleTarget;
+      grandTotals.presaleActual += projectTotals.presaleActual;
+      grandTotals.revenueTarget += projectTotals.revenueTarget;
+      grandTotals.revenueActual += projectTotals.revenueActual;
+      grandTotals.mktExpense += projectTotals.mktExpense;
+      grandTotals.totalLead += projectTotals.totalLead;
+      grandTotals.qualityLead += projectTotals.qualityLead;
+      grandTotals.walk += projectTotals.walk;
+      grandTotals.book += projectTotals.book;
+      grandTotals.booking += projectTotals.booking;
+      grandTotals.livnex += projectTotals.livnex;
+
+      projects.push({
+        ...proj,
+        bud: perfResult.rows[0]?.bud || '',
+        responsibleQuarters,
+        performance: perfResult.rows,
+        totals: projectTotals,
+        presaleAchievePct: projectTotals.presaleTarget > 0 ? (projectTotals.presaleActual / projectTotals.presaleTarget) * 100 : 0,
+        revenueAchievePct: projectTotals.revenueTarget > 0 ? (projectTotals.revenueActual / projectTotals.revenueTarget) * 100 : 0,
+      });
+    }
+
+    // Get team members for all projects under this VP
+    const projectCodes = Object.keys(projectMap);
+    let salesManagers = [];
+    let marketingManagers = [];
+
+    if (projectCodes.length > 0) {
+      // Get Sales Managers (MGR from Sale department)
+      const mgrResult = await pool.query(`
+        SELECT DISTINCT name, position, project_code, project_name
+        FROM "Project_User_Mapping"
+        WHERE department = 'Sale' AND role_type = 'MGR' AND project_code = ANY($1)
+        ORDER BY name
+      `, [projectCodes]);
+
+      // Group by manager name
+      const mgrMap = {};
+      mgrResult.rows.forEach(row => {
+        if (!mgrMap[row.name]) {
+          mgrMap[row.name] = {
+            name: row.name,
+            position: row.position,
+            projects: [],
+          };
+        }
+        mgrMap[row.name].projects.push({
+          projectCode: row.project_code,
+          projectName: row.project_name,
+        });
+      });
+      salesManagers = Object.values(mgrMap);
+
+      // Get Marketing Managers (MGR from Mkt department)
+      const mktResult = await pool.query(`
+        SELECT DISTINCT name, position, project_code, project_name
+        FROM "Project_User_Mapping"
+        WHERE department = 'Mkt' AND role_type = 'MGR' AND project_code = ANY($1)
+        ORDER BY name
+      `, [projectCodes]);
+
+      // Group by manager name
+      const mktMap = {};
+      mktResult.rows.forEach(row => {
+        if (!mktMap[row.name]) {
+          mktMap[row.name] = {
+            name: row.name,
+            position: row.position,
+            projects: [],
+          };
+        }
+        mktMap[row.name].projects.push({
+          projectCode: row.project_code,
+          projectName: row.project_name,
+        });
+      });
+      marketingManagers = Object.values(mktMap);
+    }
+
+    // Calculate KPIs
+    const kpis = {
+      presaleAchievePct: grandTotals.presaleTarget > 0 ? (grandTotals.presaleActual / grandTotals.presaleTarget) * 100 : 0,
+      revenueAchievePct: grandTotals.revenueTarget > 0 ? (grandTotals.revenueActual / grandTotals.revenueTarget) * 100 : 0,
+      avgCPL: grandTotals.totalLead > 0 ? grandTotals.mktExpense / grandTotals.totalLead : 0,
+      avgCPQL: grandTotals.qualityLead > 0 ? grandTotals.mktExpense / grandTotals.qualityLead : 0,
+      leadToQLRatio: grandTotals.qualityLead > 0 ? grandTotals.totalLead / grandTotals.qualityLead : 0,
+      qlToWalkRatio: grandTotals.walk > 0 ? grandTotals.qualityLead / grandTotals.walk : 0,
+      walkToBookRatio: grandTotals.book > 0 ? grandTotals.walk / grandTotals.book : 0,
+      mktPctBooking: grandTotals.booking > 0 ? (grandTotals.mktExpense / grandTotals.booking) * 100 : 0,
+    };
+
+    // Convert quarterly performance to array
+    const quarterlyData = Object.values(quarterlyPerformance).sort((a, b) => {
+      const order = ['Q1', 'Q2', 'Q3', 'Q4'];
+      return order.indexOf(a.quarter) - order.indexOf(b.quarter);
+    });
+
+    res.json({
+      name: vp.name,
+      position: vp.position,
+      roleType: vp.role_type,
+      projectCount: projects.length,
+      projects,
+      grandTotals,
+      kpis,
+      quarterlyPerformance: quarterlyData,
+      team: {
+        salesManagers,
+        marketingManagers,
+      },
+    });
+  } catch (err) {
+    console.error('Error fetching VP detail:', err);
     res.status(500).json({ error: err.message });
   }
 });

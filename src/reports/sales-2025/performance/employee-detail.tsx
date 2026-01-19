@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { PageHeader } from '@shared/ui';
-import { ArrowLeft, Building, Calendar, Target, DollarSign } from 'lucide-react';
+import { PageHeader, LeadFunnelCards } from '@shared/ui';
+import { ArrowLeft, Building, Target, DollarSign, Users, TrendingUp, Zap } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -24,20 +24,56 @@ interface QuarterPerformance {
   revenue_target: number;
   revenue_actual: number;
   revenue_achieve_pct: number;
+  mkt_expense: number;
+  total_lead: number;
+  quality_lead: number;
+  walk: number;
+  book: number;
+  booking: number;
+  livnex: number;
 }
 
 interface Project {
   projectCode: string;
   projectName: string;
+  bud: string;
   months: string[];
   performance: QuarterPerformance[];
+}
+
+interface GrandTotals {
+  presaleTarget: number;
+  presaleActual: number;
+  revenueTarget: number;
+  revenueActual: number;
+  mktExpense: number;
+  totalLead: number;
+  qualityLead: number;
+  walk: number;
+  book: number;
+  booking: number;
+  livnex: number;
+}
+
+interface KPIs {
+  presaleAchievePct: number;
+  revenueAchievePct: number;
+  avgCPL: number;
+  avgCPQL: number;
+  leadToQLRatio: number;
+  qlToWalkRatio: number;
+  walkToBookRatio: number;
+  mktPctBooking: number;
 }
 
 interface EmployeeDetail {
   name: string;
   position: string;
   roleType: string;
+  department: string;
   projects: Project[];
+  grandTotals: GrandTotals;
+  kpis: KPIs;
 }
 
 function formatNumber(num: number | string): string {
@@ -93,33 +129,64 @@ export function EmployeeDetailPage() {
     );
   }
 
-  // Calculate totals
-  const totals = data.projects.reduce((acc, proj) => {
-    proj.performance.forEach(q => {
-      acc.presaleTarget += Number(q.presale_target);
-      acc.presaleActual += Number(q.presale_actual);
-      acc.revenueTarget += Number(q.revenue_target);
-      acc.revenueActual += Number(q.revenue_actual);
-    });
-    return acc;
-  }, { presaleTarget: 0, presaleActual: 0, revenueTarget: 0, revenueActual: 0 });
+  const { grandTotals, kpis } = data;
 
-  const presaleAchieve = totals.presaleTarget > 0 ? (totals.presaleActual / totals.presaleTarget) * 100 : 0;
-  const revenueAchieve = totals.revenueTarget > 0 ? (totals.revenueActual / totals.revenueTarget) * 100 : 0;
+  // Aggregate by quarter for chart (including booking and livnex)
+  const quarterMap: Record<string, {
+    presaleTarget: number;
+    presaleActual: number;
+    revenueTarget: number;
+    revenueActual: number;
+    booking: number;
+    livnex: number;
+    mktExpense: number;
+    totalLead: number;
+    qualityLead: number;
+    walk: number;
+    book: number;
+  }> = {};
 
-  // Aggregate by quarter for chart
-  const quarterMap: Record<string, { presaleTarget: number; presaleActual: number; revenueTarget: number; revenueActual: number }> = {};
   data.projects.forEach(proj => {
     proj.performance.forEach(q => {
       if (!quarterMap[q.quarter]) {
-        quarterMap[q.quarter] = { presaleTarget: 0, presaleActual: 0, revenueTarget: 0, revenueActual: 0 };
+        quarterMap[q.quarter] = {
+          presaleTarget: 0,
+          presaleActual: 0,
+          revenueTarget: 0,
+          revenueActual: 0,
+          booking: 0,
+          livnex: 0,
+          mktExpense: 0,
+          totalLead: 0,
+          qualityLead: 0,
+          walk: 0,
+          book: 0,
+        };
       }
-      quarterMap[q.quarter].presaleTarget += Number(q.presale_target);
-      quarterMap[q.quarter].presaleActual += Number(q.presale_actual);
-      quarterMap[q.quarter].revenueTarget += Number(q.revenue_target);
-      quarterMap[q.quarter].revenueActual += Number(q.revenue_actual);
+      quarterMap[q.quarter].presaleTarget += Number(q.presale_target) || 0;
+      quarterMap[q.quarter].presaleActual += Number(q.presale_actual) || 0;
+      quarterMap[q.quarter].revenueTarget += Number(q.revenue_target) || 0;
+      quarterMap[q.quarter].revenueActual += Number(q.revenue_actual) || 0;
+      quarterMap[q.quarter].booking += Number(q.booking) || 0;
+      quarterMap[q.quarter].livnex += Number(q.livnex) || 0;
+      quarterMap[q.quarter].mktExpense += Number(q.mkt_expense) || 0;
+      quarterMap[q.quarter].totalLead += Number(q.total_lead) || 0;
+      quarterMap[q.quarter].qualityLead += Number(q.quality_lead) || 0;
+      quarterMap[q.quarter].walk += Number(q.walk) || 0;
+      quarterMap[q.quarter].book += Number(q.book) || 0;
     });
   });
+
+  // Prepare quarters data for funnel cards
+  const funnelQuarters = Object.entries(quarterMap)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([quarter, vals]) => ({
+      quarter,
+      totalLead: vals.totalLead,
+      qualityLead: vals.qualityLead,
+      walk: vals.walk,
+      book: vals.book,
+    }));
 
   const chartData = Object.entries(quarterMap)
     .sort(([a], [b]) => a.localeCompare(b))
@@ -129,79 +196,164 @@ export function EmployeeDetailPage() {
       'Presale Actual': vals.presaleActual,
       'Revenue Target': vals.revenueTarget,
       'Revenue Actual': vals.revenueActual,
+      'Booking': vals.booking,
+      'Livnex': vals.livnex,
     }));
+
+  const getEmployeeTypeBadge = () => {
+    if (data.department === 'Mkt') {
+      return <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">MGR-Marketing</span>;
+    }
+    return <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm font-medium">MGR-Sale</span>;
+  };
 
   return (
     <div className="min-h-screen">
       <PageHeader
         title={data.name}
-        subtitle={`${data.position} (${data.roleType})`}
+        subtitle={`${data.position}`}
       />
 
       <div className="p-8">
         {/* Back button */}
-        <button
-          onClick={() => navigate('/sales-2025/employees')}
-          className="mb-6 flex items-center gap-2 text-slate-600 hover:text-slate-800"
-        >
-          <ArrowLeft size={20} />
-          <span>กลับไปรายชื่อพนักงาน</span>
-        </button>
+        <div className="flex items-center justify-between mb-6">
+          <button
+            onClick={() => navigate('/sales-2025/employees')}
+            className="flex items-center gap-2 text-slate-600 hover:text-slate-800"
+          >
+            <ArrowLeft size={20} />
+            <span>กลับไปรายชื่อพนักงาน</span>
+          </button>
+          {getEmployeeTypeBadge()}
+        </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="card">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-purple-100 rounded-lg">
-                <Building className="text-purple-600" size={24} />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-slate-800">{data.projects.length}</div>
-                <div className="text-sm text-slate-500">Projects</div>
-              </div>
-            </div>
-          </div>
-          <div className="card">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-emerald-100 rounded-lg">
-                <Target className="text-emerald-600" size={24} />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-slate-800">{formatCurrency(totals.presaleActual)}</div>
-                <div className="text-sm text-slate-500">Presale Actual ({presaleAchieve.toFixed(0)}%)</div>
+        {/* Sales KPI Cards */}
+        <div className="mb-8">
+          <h3 className="text-lg font-semibold text-slate-800 mb-4">Sales Performance</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="card bg-gradient-to-br from-indigo-50 to-white border-indigo-100">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-indigo-100 rounded-lg">
+                  <Building className="text-indigo-600" size={24} />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-indigo-700">{data.projects.length}</div>
+                  <div className="text-sm text-slate-500">Projects</div>
+                </div>
               </div>
             </div>
-          </div>
-          <div className="card">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <DollarSign className="text-blue-600" size={24} />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-slate-800">{formatCurrency(totals.revenueActual)}</div>
-                <div className="text-sm text-slate-500">Revenue Actual ({revenueAchieve.toFixed(0)}%)</div>
+            <div className="card bg-gradient-to-br from-purple-50 to-white border-purple-100">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-purple-100 rounded-lg">
+                  <TrendingUp className="text-purple-600" size={24} />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-purple-700">{formatCurrency(grandTotals.booking)}</div>
+                  <div className="text-sm text-slate-500">Booking</div>
+                </div>
               </div>
             </div>
-          </div>
-          <div className="card">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-orange-100 rounded-lg">
-                <Calendar className="text-orange-600" size={24} />
+            <div className="card bg-gradient-to-br from-orange-50 to-white border-orange-100">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-orange-100 rounded-lg">
+                  <Zap className="text-orange-600" size={24} />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-orange-700">{formatCurrency(grandTotals.livnex)}</div>
+                  <div className="text-sm text-slate-500">Livnex</div>
+                </div>
               </div>
-              <div>
-                <div className="text-2xl font-bold text-slate-800">{chartData.length}</div>
-                <div className="text-sm text-slate-500">Quarters</div>
+            </div>
+            <div className="card bg-gradient-to-br from-emerald-50 to-white border-emerald-100">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-emerald-100 rounded-lg">
+                  <Target className="text-emerald-600" size={24} />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-emerald-700">{formatCurrency(grandTotals.presaleActual)}</div>
+                  <div className="text-sm text-slate-500">Presale ({kpis.presaleAchievePct.toFixed(0)}%)</div>
+                </div>
+              </div>
+            </div>
+            <div className="card bg-gradient-to-br from-blue-50 to-white border-blue-100">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-blue-100 rounded-lg">
+                  <DollarSign className="text-blue-600" size={24} />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-blue-700">{formatCurrency(grandTotals.revenueActual)}</div>
+                  <div className="text-sm text-slate-500">Revenue ({kpis.revenueAchievePct.toFixed(0)}%)</div>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
+        {/* Marketing KPI Cards */}
+        <div className="mb-8">
+          <h3 className="text-lg font-semibold text-slate-800 mb-4">Marketing Performance</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="card bg-gradient-to-br from-orange-50 to-white border-orange-100">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-orange-100 rounded-lg">
+                  <DollarSign className="text-orange-600" size={24} />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-orange-700">{formatCurrency(grandTotals.mktExpense)}</div>
+                  <div className="text-sm text-slate-500">MKT Expense</div>
+                </div>
+              </div>
+            </div>
+            <div className="card bg-gradient-to-br from-purple-50 to-white border-purple-100">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-purple-100 rounded-lg">
+                  <Users className="text-purple-600" size={24} />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-purple-700">{grandTotals.totalLead.toLocaleString()}</div>
+                  <div className="text-sm text-slate-500">Total Lead (CPL: ฿{kpis.avgCPL.toFixed(0)})</div>
+                </div>
+              </div>
+            </div>
+            <div className="card bg-gradient-to-br from-emerald-50 to-white border-emerald-100">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-emerald-100 rounded-lg">
+                  <Target className="text-emerald-600" size={24} />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-emerald-700">{grandTotals.qualityLead.toLocaleString()}</div>
+                  <div className="text-sm text-slate-500">Quality Lead (CPQL: ฿{kpis.avgCPQL.toFixed(0)})</div>
+                </div>
+              </div>
+            </div>
+            <div className="card bg-gradient-to-br from-slate-50 to-white border-slate-200">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-slate-100 rounded-lg">
+                  <Users className="text-slate-600" size={24} />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-slate-700">
+                    {grandTotals.totalLead > 0 ? ((grandTotals.qualityLead / grandTotals.totalLead) * 100).toFixed(1) : 0}%
+                  </div>
+                  <div className="text-sm text-slate-500">Quality Rate</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Lead Conversion Funnel - 5 Cards */}
+        <LeadFunnelCards
+          totals={{ lead: grandTotals.totalLead, ql: grandTotals.qualityLead, walk: grandTotals.walk, book: grandTotals.book }}
+          quarters={funnelQuarters}
+        />
+
         {/* Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <div className="card">
             <div className="mb-4">
-              <h3 className="font-semibold text-slate-800">Presale Performance</h3>
-              <p className="text-sm text-slate-500">Target vs Actual by Quarter</p>
+              <h3 className="font-semibold text-slate-800">Sales Performance by Quarter</h3>
+              <p className="text-sm text-slate-500">Presale, Revenue, Booking, Livnex</p>
             </div>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={chartData}>
@@ -216,21 +368,40 @@ export function EmployeeDetailPage() {
                     borderRadius: '8px',
                   }}
                 />
-                <Legend />
-                <Bar dataKey="Presale Target" fill="#94a3b8" radius={[4, 4, 0, 0]}>
-                  <LabelList dataKey="Presale Target" position="top" formatter={formatNumber} fontSize={11} fill="#64748b" />
-                </Bar>
-                <Bar dataKey="Presale Actual" fill="#10b981" radius={[4, 4, 0, 0]}>
-                  <LabelList dataKey="Presale Actual" position="top" formatter={formatNumber} fontSize={11} fill="#059669" />
-                </Bar>
+                <Legend
+                  content={() => (
+                    <div className="flex justify-center gap-4 pt-2">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#10b981' }} />
+                        <span className="text-xs text-slate-600">Presale Actual</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#3b82f6' }} />
+                        <span className="text-xs text-slate-600">Revenue Actual</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#8b5cf6' }} />
+                        <span className="text-xs text-slate-600">Booking</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#f97316' }} />
+                        <span className="text-xs text-slate-600">Livnex</span>
+                      </div>
+                    </div>
+                  )}
+                />
+                <Bar dataKey="Presale Actual" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Revenue Actual" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Booking" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Livnex" fill="#f97316" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
 
           <div className="card">
             <div className="mb-4">
-              <h3 className="font-semibold text-slate-800">Revenue Performance</h3>
-              <p className="text-sm text-slate-500">Target vs Actual by Quarter</p>
+              <h3 className="font-semibold text-slate-800">Target vs Actual</h3>
+              <p className="text-sm text-slate-500">Presale & Revenue by Quarter</p>
             </div>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={chartData}>
@@ -245,15 +416,89 @@ export function EmployeeDetailPage() {
                     borderRadius: '8px',
                   }}
                 />
-                <Legend />
-                <Bar dataKey="Revenue Target" fill="#94a3b8" radius={[4, 4, 0, 0]}>
-                  <LabelList dataKey="Revenue Target" position="top" formatter={formatNumber} fontSize={11} fill="#64748b" />
-                </Bar>
-                <Bar dataKey="Revenue Actual" fill="#3b82f6" radius={[4, 4, 0, 0]}>
-                  <LabelList dataKey="Revenue Actual" position="top" formatter={formatNumber} fontSize={11} fill="#2563eb" />
-                </Bar>
+                <Legend
+                  content={() => (
+                    <div className="flex justify-center gap-4 pt-2">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#94a3b8' }} />
+                        <span className="text-xs text-slate-600">Presale Target</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#10b981' }} />
+                        <span className="text-xs text-slate-600">Presale Actual</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#94a3b8' }} />
+                        <span className="text-xs text-slate-600">Revenue Target</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: '#3b82f6' }} />
+                        <span className="text-xs text-slate-600">Revenue Actual</span>
+                      </div>
+                    </div>
+                  )}
+                />
+                <Bar dataKey="Presale Target" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Presale Actual" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Revenue Target" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Revenue Actual" fill="#3b82f6" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Marketing Expense % Chart */}
+        <div className="card mb-8">
+          <h3 className="font-semibold text-slate-800 mb-4">MKT Expense % of Sales</h3>
+          <div className="space-y-4">
+            {[
+              {
+                name: 'Book + Livnex',
+                value: grandTotals.booking + grandTotals.livnex,
+                pct: (grandTotals.booking + grandTotals.livnex) > 0 ? (grandTotals.mktExpense / (grandTotals.booking + grandTotals.livnex)) * 100 : 0,
+                color: 'bg-purple-500',
+                bgColor: 'bg-purple-50',
+              },
+              {
+                name: 'Presale',
+                value: grandTotals.presaleActual,
+                pct: grandTotals.presaleActual > 0 ? (grandTotals.mktExpense / grandTotals.presaleActual) * 100 : 0,
+                color: 'bg-emerald-500',
+                bgColor: 'bg-emerald-50',
+              },
+              {
+                name: 'Transfer (Revenue)',
+                value: grandTotals.revenueActual,
+                pct: grandTotals.revenueActual > 0 ? (grandTotals.mktExpense / grandTotals.revenueActual) * 100 : 0,
+                color: 'bg-blue-500',
+                bgColor: 'bg-blue-50',
+              },
+            ].map((item, idx) => {
+              const maxPct = Math.max(
+                (grandTotals.booking + grandTotals.livnex) > 0 ? (grandTotals.mktExpense / (grandTotals.booking + grandTotals.livnex)) * 100 : 0,
+                grandTotals.presaleActual > 0 ? (grandTotals.mktExpense / grandTotals.presaleActual) * 100 : 0,
+                grandTotals.revenueActual > 0 ? (grandTotals.mktExpense / grandTotals.revenueActual) * 100 : 0
+              );
+              const barWidth = maxPct > 0 ? (item.pct / maxPct) * 100 : 0;
+              return (
+                <div key={idx} className={`p-3 rounded-lg ${item.bgColor}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-slate-700">{item.name}</span>
+                    <span className="text-sm font-bold text-slate-800">{item.pct.toFixed(2)}%</span>
+                  </div>
+                  <div className="relative h-6 bg-white/50 rounded-md overflow-hidden">
+                    <div
+                      className={`absolute left-0 top-0 h-full ${item.color} rounded-md transition-all`}
+                      style={{ width: `${Math.max(barWidth, 3)}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between mt-1 text-xs text-slate-500">
+                    <span>MKT: {formatCurrency(grandTotals.mktExpense)}</span>
+                    <span>{item.name}: {formatCurrency(item.value)}</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -266,10 +511,10 @@ export function EmployeeDetailPage() {
           <div className="space-y-4">
             {data.projects.map((proj, idx) => {
               const projTotals = proj.performance.reduce((acc, q) => {
-                acc.presaleTarget += Number(q.presale_target);
-                acc.presaleActual += Number(q.presale_actual);
-                acc.revenueTarget += Number(q.revenue_target);
-                acc.revenueActual += Number(q.revenue_actual);
+                acc.presaleTarget += Number(q.presale_target) || 0;
+                acc.presaleActual += Number(q.presale_actual) || 0;
+                acc.revenueTarget += Number(q.revenue_target) || 0;
+                acc.revenueActual += Number(q.revenue_actual) || 0;
                 return acc;
               }, { presaleTarget: 0, presaleActual: 0, revenueTarget: 0, revenueActual: 0 });
 
@@ -290,6 +535,7 @@ export function EmployeeDetailPage() {
                     <div>
                       <div className="font-medium text-blue-600 hover:underline">{proj.projectCode}</div>
                       <div className="text-sm text-slate-500">{proj.projectName}</div>
+                      {proj.bud && <span className="text-xs px-2 py-0.5 bg-slate-100 rounded text-slate-600">{proj.bud}</span>}
                     </div>
                     <div className="flex gap-2">
                       {proj.months.map(m => (

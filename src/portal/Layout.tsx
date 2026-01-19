@@ -48,6 +48,7 @@ const reportModules: ReportModule[] = [
     items: [
       { name: 'Sales Performance', href: '/sales-2025/performance' },
       { name: 'Marketing Performance', href: '/sales-2025/marketing' },
+      { name: 'BUD-Head / MGR Performance', href: '/sales-2025/employees' },
     ],
   },
   {
