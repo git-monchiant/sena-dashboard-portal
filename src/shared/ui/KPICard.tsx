@@ -82,8 +82,8 @@ export function KPICard({
           </div>
         )}
       </div>
-      <p className="text-sm text-slate-500 mb-1">{title}</p>
       <p className="text-2xl font-bold text-slate-800">{value}</p>
+      <p className="text-sm text-slate-500 mt-1">{title}</p>
       {target && (
         <div className="flex items-center gap-2 mt-2">
           <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">

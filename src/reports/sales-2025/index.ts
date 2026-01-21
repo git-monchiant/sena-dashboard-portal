@@ -6,4 +6,5 @@ export {
   EmployeeDetailPage,
   MarketingPerformancePage,
   VPDetailPage,
+  PersonDetailPage,
 } from './performance';

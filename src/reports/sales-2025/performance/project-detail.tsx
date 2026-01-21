@@ -438,9 +438,9 @@ export function ProjectDetailPage() {
                         })}
                         <hr className="my-2 border-slate-200" />
                         <div className="text-xs text-slate-500 space-y-1">
-                          <div>Lead→QL: <span className="font-medium text-slate-700">{leadToQLRatio}:1</span> ({leadToQLPct}%)</div>
-                          <div>QL→Walk: <span className="font-medium text-slate-700">{qlToWalkRatio}:1</span> ({qlToWalkPct}%)</div>
-                          <div>Walk→Book: <span className="font-medium text-slate-700">{walkToBookRatio}:1</span> ({walkToBookPct}%)</div>
+                          <div>Lead→QL: <span className="font-medium text-slate-700">{leadToQLRatio} : 1</span> ({leadToQLPct}%)</div>
+                          <div>QL→Walk: <span className="font-medium text-slate-700">{qlToWalkRatio} : 1</span> ({qlToWalkPct}%)</div>
+                          <div>Walk→Book: <span className="font-medium text-slate-700">{walkToBookRatio} : 1</span> ({walkToBookPct}%)</div>
                         </div>
                       </div>
                     );
@@ -483,7 +483,7 @@ export function ProjectDetailPage() {
                       const pct = typeof index === 'number' ? leadFunnelData[index]?.['Lead to QL %'] : '0';
                       return (
                         <text x={Number(x || 0) + Number(width || 0) / 2} y={Number(y || 0) - 5} textAnchor="middle" fontSize={9} fill="#7c3aed">
-                          {qlValue.toLocaleString()} ({ratio}:1 / {pct}%)
+                          {qlValue.toLocaleString()} ({ratio} : 1 / {pct}%)
                         </text>
                       );
                     }}
@@ -501,7 +501,7 @@ export function ProjectDetailPage() {
                       const pct = typeof index === 'number' ? leadFunnelData[index]?.['QL to Walk %'] : '0';
                       return (
                         <text x={Number(x || 0) + Number(width || 0) / 2} y={Number(y || 0) - 5} textAnchor="middle" fontSize={9} fill="#059669">
-                          {walkValue.toLocaleString()} ({ratio}:1 / {pct}%)
+                          {walkValue.toLocaleString()} ({ratio} : 1 / {pct}%)
                         </text>
                       );
                     }}
@@ -519,7 +519,7 @@ export function ProjectDetailPage() {
                       const pct = typeof index === 'number' ? leadFunnelData[index]?.['Walk to Book %'] : '0';
                       return (
                         <text x={Number(x || 0) + Number(width || 0) / 2} y={Number(y || 0) - 5} textAnchor="middle" fontSize={9} fill="#2563eb">
-                          {bookValue.toLocaleString()} ({ratio}:1 / {pct}%)
+                          {bookValue.toLocaleString()} ({ratio} : 1 / {pct}%)
                         </text>
                       );
                     }}

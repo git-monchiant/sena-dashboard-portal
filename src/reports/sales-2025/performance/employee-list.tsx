@@ -353,7 +353,7 @@ export function EmployeeListPage() {
                     <tr
                       key={idx}
                       className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
-                      onClick={() => navigate(emp.roleType === 'VP' ? `/sales-2025/vp/${encodeURIComponent(emp.name)}` : `/sales-2025/employee/${encodeURIComponent(emp.name)}`)}
+                      onClick={() => navigate(`/sales-2025/person/${encodeURIComponent(emp.name)}`)}
                     >
                       <td className="py-3 px-4">
                         <div className="font-medium text-blue-600 hover:underline">{emp.name}</div>

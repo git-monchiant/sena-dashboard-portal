@@ -6,8 +6,15 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
+    strictPort: true, // Fail if port 3000 is not available
     host: true,
     allowedHosts: ['upon-requires-normally-total.trycloudflare.com'],
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+    },
   },
   resolve: {
     alias: {

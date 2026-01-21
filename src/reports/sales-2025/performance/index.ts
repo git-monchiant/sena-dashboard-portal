@@ -5,3 +5,4 @@ export { EmployeeListPage } from './employee-list';
 export { EmployeeDetailPage } from './employee-detail';
 export { MarketingPerformancePage } from './marketing-performance';
 export { VPDetailPage } from './vp-detail';
+export { PersonDetailPage } from './person-detail';

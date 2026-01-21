@@ -105,7 +105,7 @@ export function LeadFunnelCards({ totals, quarters, embedded = false }: LeadFunn
                           )}
                           {item.ratio !== null && (
                             <span className="text-[9px] text-slate-400 tabular-nums">
-                              ({item.ratio.toFixed(1)}:1)
+                              ({item.ratio.toFixed(1)} : 1)
                             </span>
                           )}
                         </div>

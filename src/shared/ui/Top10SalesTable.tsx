@@ -141,8 +141,8 @@ export function Top10SalesTable({ projects, onRowClick, formatCurrency, hideLead
             <option value="booking">Booking</option>
             <option value="livnex">Livnex</option>
             <option value="presale_actual">Presale Actual</option>
-            <option value="revenue_actual">Revenue Actual</option>
             <option value="presale_pct">Presale %</option>
+            <option value="revenue_actual">Revenue Actual</option>
             <option value="revenue_pct">Revenue %</option>
           </select>
           <select
@@ -272,7 +272,7 @@ export function Top10SalesTable({ projects, onRowClick, formatCurrency, hideLead
                       <td className="py-2 px-3 text-center">
                         <div className="flex flex-col items-center">
                           <span className="text-sm font-semibold text-slate-700">
-                            {proj.totals.walk > 0 ? `${qlPerWalk}:1` : '-'}
+                            {proj.totals.walk > 0 ? `${qlPerWalk} : 1` : '-'}
                           </span>
                           <span className="text-[10px] text-slate-400">{proj.totals.qualityLead} / {proj.totals.walk}</span>
                         </div>
@@ -286,7 +286,7 @@ export function Top10SalesTable({ projects, onRowClick, formatCurrency, hideLead
                                 'text-red-500'
                               : 'text-slate-700'
                           }`}>
-                            {proj.totals.book > 0 ? `${walkPerBook}:1` : '-'}
+                            {proj.totals.book > 0 ? `${walkPerBook} : 1` : '-'}
                           </span>
                           <span className="text-[10px] text-slate-400">{proj.totals.walk} / {proj.totals.book}</span>
                         </div>

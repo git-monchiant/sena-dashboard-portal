@@ -11,6 +11,7 @@ import {
   AgingReportPage,
   ExceptionPage,
   CommonFeeSettingsPage,
+  ERDiagramPage,
   MaintenanceOverviewPage,
   ByResponsiblePage,
   MaintenanceAgingPage,
@@ -24,6 +25,7 @@ import {
   EmployeeDetailPage,
   MarketingPerformancePage,
   VPDetailPage,
+  PersonDetailPage,
 } from '@/reports';
 
 function App() {
@@ -43,6 +45,7 @@ function App() {
             <Route path="sales-2025/employees" element={<EmployeeListPage />} />
             <Route path="sales-2025/employee/:name" element={<EmployeeDetailPage />} />
             <Route path="sales-2025/vp/:name" element={<VPDetailPage />} />
+            <Route path="sales-2025/person/:name" element={<PersonDetailPage />} />
 
             {/* Sales Module */}
             <Route path="sales" element={<SalesOverviewPage />} />
@@ -61,6 +64,7 @@ function App() {
             <Route path="reports/common-fee/collection" element={<CollectionDetailPage />} />
             <Route path="reports/common-fee/aging" element={<AgingReportPage />} />
             <Route path="reports/common-fee/exception" element={<ExceptionPage />} />
+            <Route path="reports/common-fee/er-diagram" element={<ERDiagramPage />} />
             <Route path="reports/common-fee/settings" element={<CommonFeeSettingsPage />} />
 
             {/* Maintenance Module */}

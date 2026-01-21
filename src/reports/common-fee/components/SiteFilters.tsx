@@ -139,15 +139,22 @@ interface FilterOptions {
   periods: Period[];
 }
 
-export interface CollectionFilterValues {
+export interface SiteFilterValues {
   siteId: string;
   period: string;
   status: string;
+  year: string;
+  payGroup: string;
 }
 
-interface CollectionFiltersProps {
-  onApply: (filters: CollectionFilterValues) => void;
-  initialValues?: Partial<CollectionFilterValues>;
+interface SiteFiltersProps {
+  onApply: (filters: SiteFilterValues) => void;
+  initialValues?: Partial<SiteFilterValues>;
+  storageKey?: string;
+  showPeriod?: boolean;
+  showStatus?: boolean;
+  showYear?: boolean;
+  showPayGroup?: boolean;
 }
 
 const statusLabels: Record<string, string> = {
@@ -161,14 +168,27 @@ const statusLabels: Record<string, string> = {
   waiting_fix: 'รอแก้ไข',
 };
 
+const payGroupLabels: Record<string, string> = {
+  all: 'ทั้งหมด',
+  owner: 'เจ้าของห้อง',
+  developer: 'ผู้พัฒนา',
+  rent: 'ผู้เช่า',
+  agent: 'ตัวแทน',
+};
+
+const payGroupOptions: SelectOption[] = [
+  { value: 'owner', label: 'เจ้าของห้อง' },
+  { value: 'developer', label: 'ผู้พัฒนา' },
+  { value: 'rent', label: 'ผู้เช่า' },
+  { value: 'agent', label: 'ตัวแทน' },
+];
+
 // Statuses to show in dropdown (in order)
 const allowedStatuses = ['all', 'active', 'overdue', 'paid', 'partial_payment', 'void'];
 
-const STORAGE_KEY = 'common-fee-collection-filters';
-
-function getFiltersFromStorage(): CollectionFilterValues | null {
+function getFiltersFromStorage(key: string): SiteFilterValues | null {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
+    const saved = localStorage.getItem(key);
     if (saved) return JSON.parse(saved);
   } catch (e) {
     console.error('Failed to parse saved filters:', e);
@@ -176,24 +196,32 @@ function getFiltersFromStorage(): CollectionFilterValues | null {
   return null;
 }
 
-function saveFiltersToStorage(filters: CollectionFilterValues) {
+function saveFiltersToStorage(key: string, filters: SiteFilterValues) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(filters));
+    localStorage.setItem(key, JSON.stringify(filters));
   } catch (e) {
     console.error('Failed to save filters:', e);
   }
 }
 
-function clearFiltersFromStorage() {
+function clearFiltersFromStorage(key: string) {
   try {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(key);
   } catch (e) {
     console.error('Failed to clear filters:', e);
   }
 }
 
 // ===== Main Component =====
-export function CollectionFilters({ onApply, initialValues }: CollectionFiltersProps) {
+export function SiteFilters({
+  onApply,
+  initialValues,
+  storageKey = 'common-fee-site-filters',
+  showPeriod = true,
+  showStatus = true,
+  showYear = true,
+  showPayGroup = true,
+}: SiteFiltersProps) {
   const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null);
   const [periods, setPeriods] = useState<Period[]>([]);
   const [periodsLoading, setPeriodsLoading] = useState(false);
@@ -201,14 +229,20 @@ export function CollectionFilters({ onApply, initialValues }: CollectionFiltersP
   const [error, setError] = useState<string | null>(null);
   const hasAppliedInitial = useRef(false);
 
+  // Generate year options: current year + 15 years back
+  const currentYear = new Date().getFullYear();
+  const availableYears = Array.from({ length: 16 }, (_, i) => currentYear - i);
+
   // Filter state - restore from localStorage
-  const [filters, setFilters] = useState<CollectionFilterValues>(() => {
-    const saved = getFiltersFromStorage();
-    if (saved) return saved;
+  const [filters, setFilters] = useState<SiteFilterValues>(() => {
+    const saved = getFiltersFromStorage(storageKey);
+    if (saved) return { ...saved, payGroup: saved.payGroup === 'all' ? '' : (saved.payGroup || '') };
     return {
       siteId: initialValues?.siteId || '',
       period: initialValues?.period || '',
       status: initialValues?.status || 'all',
+      year: initialValues?.year || new Date().getFullYear().toString(),
+      payGroup: initialValues?.payGroup || '',
     };
   });
 
@@ -219,6 +253,7 @@ export function CollectionFilters({ onApply, initialValues }: CollectionFiltersP
         const response = await fetch('/api/common-fee/filters');
         if (!response.ok) throw new Error('Failed to fetch filters');
         const data = await response.json();
+
         // Only set sites and statuses, NOT periods
         setFilterOptions({
           sites: data.sites,
@@ -237,6 +272,15 @@ export function CollectionFilters({ onApply, initialValues }: CollectionFiltersP
 
   // 2. Fetch periods based on current siteId - runs on mount and when siteId changes
   useEffect(() => {
+    if (!showPeriod) {
+      // If not showing period, still apply initial filters
+      if (!hasAppliedInitial.current) {
+        hasAppliedInitial.current = true;
+        onApply(filters);
+      }
+      return;
+    }
+
     async function fetchPeriods() {
       setPeriodsLoading(true);
       try {
@@ -249,18 +293,7 @@ export function CollectionFilters({ onApply, initialValues }: CollectionFiltersP
         const data: Period[] = await response.json();
         setPeriods(data);
 
-        // Check if current period is valid for this site
-        if (filters.period && !data.some((p: Period) => p.period === filters.period)) {
-          // Current period not available, reset to first
-          const newFilters = { ...filters, period: data[0]?.period || '' };
-          setFilters(newFilters);
-          saveFiltersToStorage(newFilters);
-          if (hasAppliedInitial.current) {
-            onApply(newFilters);
-          }
-        }
-
-        // Apply initial filters only once after periods are loaded
+        // Apply initial filters once after periods are loaded
         if (!hasAppliedInitial.current) {
           hasAppliedInitial.current = true;
           onApply(filters);
@@ -273,28 +306,34 @@ export function CollectionFilters({ onApply, initialValues }: CollectionFiltersP
     }
 
     fetchPeriods();
-  }, [filters.siteId]); // Only depends on siteId
+  }, [filters.siteId, showPeriod]); // Only depends on siteId
 
-  const handleChange = (key: keyof CollectionFilterValues, value: string) => {
-    // When site changes, just update siteId - the useEffect will handle period fetching
+  const handleChange = (key: keyof SiteFilterValues, value: string) => {
+    // When site changes, reset period to empty (ทุกงวด)
     if (key === 'siteId') {
-      const newFilters = { ...filters, siteId: value, period: '' }; // Reset period
+      const newFilters = { ...filters, siteId: value, period: '' };
       setFilters(newFilters);
-      saveFiltersToStorage(newFilters);
-      // Don't call onApply yet - wait for periods to load and auto-select first period
+      saveFiltersToStorage(storageKey, newFilters);
+      onApply(newFilters);
       return;
     }
 
     const newFilters = { ...filters, [key]: value };
     setFilters(newFilters);
-    saveFiltersToStorage(newFilters);
+    saveFiltersToStorage(storageKey, newFilters);
     onApply(newFilters);
   };
 
   const handleClear = () => {
-    const cleared: CollectionFilterValues = { siteId: '', period: '', status: 'all' };
+    const cleared: SiteFilterValues = {
+      siteId: '',
+      period: '',
+      status: 'all',
+      year: new Date().getFullYear().toString(),
+      payGroup: '',
+    };
     setFilters(cleared);
-    clearFiltersFromStorage();
+    clearFiltersFromStorage(storageKey);
     onApply(cleared);
   };
 
@@ -337,6 +376,9 @@ export function CollectionFilters({ onApply, initialValues }: CollectionFiltersP
       label: `${statusLabels[s.status] || s.status} (${parseInt(s.count).toLocaleString()})`,
     })) || [];
 
+  // Calculate grid columns based on what's shown
+  const gridCols = (showYear ? 1 : 0) + 1 + (showPeriod ? 1 : 0) + (showStatus ? 1 : 0) + (showPayGroup ? 1 : 0) + 1; // year? + site + period? + status? + payGroup? + clear button
+
   return (
     <div className="card mb-6">
       <div className="flex items-center gap-2 mb-4">
@@ -344,7 +386,23 @@ export function CollectionFilters({ onApply, initialValues }: CollectionFiltersP
         <h3 className="font-semibold text-slate-800">Filters</h3>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-${gridCols} gap-4`}>
+        {/* Year Filter */}
+        {showYear && (
+          <div>
+            <label className="block text-sm font-medium text-slate-600 mb-1">ปี</label>
+            <select
+              value={filters.year}
+              onChange={(e) => handleChange('year', e.target.value)}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white text-slate-800"
+            >
+              {availableYears.map((y) => (
+                <option key={y} value={String(y)}>{y}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Site Filter */}
         <div>
           <label className="block text-sm font-medium text-slate-600 mb-1">โครงการ / Site</label>
@@ -357,29 +415,46 @@ export function CollectionFilters({ onApply, initialValues }: CollectionFiltersP
         </div>
 
         {/* Period Filter */}
-        <div>
-          <label className="block text-sm font-medium text-slate-600 mb-1">
-            งวดเรียกเก็บ
-            {periodsLoading && <span className="ml-2 text-xs text-slate-400">(กำลังโหลด...)</span>}
-          </label>
-          <SearchableSelect
-            value={filters.period}
-            onChange={(val) => handleChange('period', val)}
-            options={periodOptions}
-            placeholder="ทุกงวด"
-          />
-        </div>
+        {showPeriod && (
+          <div>
+            <label className="block text-sm font-medium text-slate-600 mb-1">
+              งวดเรียกเก็บ
+              {periodsLoading && <span className="ml-2 text-xs text-slate-400">(กำลังโหลด...)</span>}
+            </label>
+            <SearchableSelect
+              value={filters.period}
+              onChange={(val) => handleChange('period', val)}
+              options={periodOptions}
+              placeholder="ทุกงวด"
+            />
+          </div>
+        )}
 
         {/* Status Filter */}
-        <div>
-          <label className="block text-sm font-medium text-slate-600 mb-1">สถานะ</label>
-          <SearchableSelect
-            value={filters.status}
-            onChange={(val) => handleChange('status', val === '' ? 'all' : val)}
-            options={statusOptions}
-            placeholder="ทั้งหมด"
-          />
-        </div>
+        {showStatus && (
+          <div>
+            <label className="block text-sm font-medium text-slate-600 mb-1">สถานะ</label>
+            <SearchableSelect
+              value={filters.status}
+              onChange={(val) => handleChange('status', val === '' ? 'all' : val)}
+              options={statusOptions}
+              placeholder="ทั้งหมด"
+            />
+          </div>
+        )}
+
+        {/* Pay Group Filter */}
+        {showPayGroup && (
+          <div>
+            <label className="block text-sm font-medium text-slate-600 mb-1">ประเภทค่าใช้จ่าย</label>
+            <SearchableSelect
+              value={filters.payGroup}
+              onChange={(val) => handleChange('payGroup', val)}
+              options={payGroupOptions}
+              placeholder="ทั้งหมด"
+            />
+          </div>
+        )}
 
         {/* Clear Button */}
         <div className="flex items-end">

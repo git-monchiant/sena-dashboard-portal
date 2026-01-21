@@ -1,18 +1,21 @@
-import { CommonFeeFilterState } from './filters';
+import { SiteFilterValues } from '../components';
 
 export interface CommonFeeKPIData {
   totalBilled: {
     value: string;
+    rawValue: number;
     change: string;
     changeType: 'positive' | 'negative';
   };
   totalPaid: {
     value: string;
+    rawValue: number;
     change: string;
     changeType: 'positive' | 'negative';
   };
   totalOutstanding: {
     value: string;
+    rawValue: number;
     change: string;
     changeType: 'positive' | 'negative';
   };
@@ -38,9 +41,13 @@ export interface StatusDistribution {
 
 export interface TrendDataPoint {
   month: string;
+  monthKey?: string;
   billed: number;
   paid: number;
   outstanding: number;
+  cumBilled: number;
+  cumPaid: number;
+  cumOutstanding: number;
 }
 
 export interface RiskUnit {
@@ -65,73 +72,62 @@ export interface CommonFeeOverviewData {
   highRiskUnits: RiskUnit[];
   overdueUnits: RiskUnit[];
   syncInfo: SyncInfo;
+  availableYears: number[];
+  selectedYear: number;
+  trendUnit: string;
 }
 
 export async function fetchCommonFeeOverview(
-  _filters: CommonFeeFilterState
+  filters: SiteFilterValues
 ): Promise<CommonFeeOverviewData> {
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  // Build query params from all filters
+  const params = new URLSearchParams();
+  if (filters.siteId) {
+    params.set('site_id', filters.siteId);
+  }
+  if (filters.year && filters.year !== 'all') {
+    params.set('year', filters.year);
+  }
+  if (filters.period) {
+    params.set('period', filters.period);
+  }
+  if (filters.status && filters.status !== 'all') {
+    params.set('status', filters.status);
+  }
+  if (filters.payGroup) {
+    params.set('pay_group', filters.payGroup);
+  }
 
+  const url = `/api/common-fee/overview${params.toString() ? `?${params}` : ''}`;
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch overview data');
+  }
+
+  const data = await response.json();
+
+  // Map API response to CommonFeeOverviewData
   return {
     kpis: {
-      totalBilled: {
-        value: '฿ 12.5M',
-        change: '+8.2%',
-        changeType: 'positive',
-      },
-      totalPaid: {
-        value: '฿ 10.8M',
-        change: '+12.5%',
-        changeType: 'positive',
-      },
-      totalOutstanding: {
-        value: '฿ 1.7M',
-        change: '-15.3%',
-        changeType: 'positive',
-      },
+      totalBilled: data.kpis.totalBilled,
+      totalPaid: data.kpis.totalPaid,
+      totalOutstanding: data.kpis.totalOutstanding,
       collectionRate: {
-        value: '86.4%',
-        percentage: 86.4,
-        change: '+3.2%',
+        value: '0%',
+        percentage: 0,
+        change: '+0%',
         changeType: 'positive',
       },
-      outstandingUnits: {
-        value: 48,
-        change: '-12',
-        changeType: 'positive',
-      },
+      outstandingUnits: data.kpis.outstandingUnits,
     },
-    statusDistribution: {
-      paid: 72,
-      partial: 8,
-      unpaid: 12,
-      overdue: 8,
-    },
-    trend: [
-      { month: 'ม.ค.', billed: 2100, paid: 1800, outstanding: 300 },
-      { month: 'ก.พ.', billed: 2050, paid: 1750, outstanding: 300 },
-      { month: 'มี.ค.', billed: 2200, paid: 1950, outstanding: 250 },
-      { month: 'เม.ย.', billed: 2150, paid: 1900, outstanding: 250 },
-      { month: 'พ.ค.', billed: 2000, paid: 1850, outstanding: 150 },
-      { month: 'มิ.ย.', billed: 2000, paid: 1800, outstanding: 200 },
-    ],
-    highRiskUnits: [
-      { unit: 'A-1205', owner: 'คุณสมชาย ใจดี', project: 'SENA Park Grand Rama 9', amount: 185000, daysOverdue: 120 },
-      { unit: 'B-0803', owner: 'คุณวิภา แสงทอง', project: 'SENA Ville Bangna', amount: 142000, daysOverdue: 95 },
-      { unit: 'C-1502', owner: 'บริษัท เอบีซี จำกัด', project: 'SENA Park Pinklao', amount: 128500, daysOverdue: 88 },
-      { unit: 'A-0901', owner: 'คุณประยุทธ์ มั่นคง', project: 'SENA Park Grand Rama 9', amount: 98000, daysOverdue: 75 },
-      { unit: 'D-2001', owner: 'คุณนภา สดใส', project: 'SENA Grand Sukhumvit', amount: 89000, daysOverdue: 62 },
-    ],
-    overdueUnits: [
-      { unit: 'A-1205', owner: 'คุณสมชาย ใจดี', project: 'SENA Park Grand Rama 9', amount: 185000, daysOverdue: 120 },
-      { unit: 'B-0803', owner: 'คุณวิภา แสงทอง', project: 'SENA Ville Bangna', amount: 142000, daysOverdue: 95 },
-      { unit: 'C-1502', owner: 'บริษัท เอบีซี จำกัด', project: 'SENA Park Pinklao', amount: 128500, daysOverdue: 88 },
-    ],
-    syncInfo: {
-      lastSyncAt: '2024-01-15 14:30:00',
-      totalUnits: 2820,
-      totalProjects: 4,
-      status: 'synced',
-    },
+    statusDistribution: data.statusDistribution,
+    trend: data.trend,
+    highRiskUnits: data.highRiskUnits,
+    overdueUnits: data.highRiskUnits, // Use same data for now
+    syncInfo: data.syncInfo,
+    availableYears: data.availableYears || [],
+    selectedYear: data.selectedYear || new Date().getFullYear(),
+    trendUnit: data.trendUnit || 'M',
   };
 }

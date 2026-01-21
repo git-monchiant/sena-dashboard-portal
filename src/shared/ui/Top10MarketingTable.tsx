@@ -52,7 +52,7 @@ function saveTableState(key: string, state: TableState) {
 export function Top10MarketingTable({ projects, onRowClick, formatCurrency, storageKey = 'top10-mkt-table' }: Top10MarketingTableProps) {
   const [sortBy, setSortBy] = useState<SortBy>(() => {
     const saved = getTableState(storageKey);
-    return saved?.sortBy ?? 'lead';
+    return saved?.sortBy ?? 'mkt_expense';
   });
   const [sortDir, setSortDir] = useState<SortDir>(() => {
     const saved = getTableState(storageKey);
@@ -148,17 +148,17 @@ export function Top10MarketingTable({ projects, onRowClick, formatCurrency, stor
             onChange={(e) => handleSortByChange(e.target.value as SortBy)}
             className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
           >
+            <option value="mkt_expense">MKT Expense</option>
+            <option value="presale_actual">Presale Actual</option>
+            <option value="mkt_pct_presale">MKT% Presale</option>
+            <option value="revenue_actual">Revenue Actual</option>
+            <option value="mkt_pct_revenue">MKT% Revenue</option>
             <option value="lead">Lead</option>
             <option value="ql">Quality Lead</option>
             <option value="walk">Walk</option>
             <option value="book">Book</option>
-            <option value="mkt_expense">MKT Expense</option>
             <option value="cpl">CPL</option>
             <option value="cpb">CPB</option>
-            <option value="presale_actual">Presale Actual</option>
-            <option value="revenue_actual">Revenue Actual</option>
-            <option value="mkt_pct_presale">MKT% Presale</option>
-            <option value="mkt_pct_revenue">MKT% Revenue</option>
           </select>
           <select
             value={sortDir}
@@ -297,7 +297,7 @@ export function Top10MarketingTable({ projects, onRowClick, formatCurrency, stor
                       </div>
                       <div className="flex justify-between text-[10px] text-slate-400 font-mono">
                         <span>→ QL: {proj.totals.qualityLead.toLocaleString()}</span>
-                        <span className="text-slate-500">{leadPerQl}:1</span>
+                        <span className="text-slate-500">{leadPerQl} : 1</span>
                       </div>
                     </div>
                   </td>
@@ -327,7 +327,7 @@ export function Top10MarketingTable({ projects, onRowClick, formatCurrency, stor
                       </div>
                       <div className="flex justify-between text-[10px] text-slate-400 font-mono">
                         <span>→ Walk: {proj.totals.walk.toLocaleString()}</span>
-                        <span className="text-slate-500">{qlPerWalk}:1</span>
+                        <span className="text-slate-500">{qlPerWalk} : 1</span>
                       </div>
                     </div>
                   </td>
@@ -357,7 +357,7 @@ export function Top10MarketingTable({ projects, onRowClick, formatCurrency, stor
                       </div>
                       <div className="flex justify-between text-[10px] text-slate-400 font-mono">
                         <span>→ Book: {proj.totals.book.toLocaleString()}</span>
-                        <span className="text-slate-500">{walkPerBook}:1</span>
+                        <span className="text-slate-500">{walkPerBook} : 1</span>
                       </div>
                     </div>
                   </td>

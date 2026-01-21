@@ -1,19 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader, KPICard } from '@shared/ui';
-import { CommonFeeFilters, CommonFeeFilterState } from './filters';
+import { SiteFilters, SiteFilterValues } from '../components';
 import { fetchCommonFeeOverview, CommonFeeOverviewData } from './queries';
 import {
   Wallet,
   CheckCircle,
   AlertCircle,
-  TrendingUp,
   Users,
   ArrowRight,
   FileText,
   Clock,
   AlertTriangle,
-  RefreshCw,
   Database,
   Building2,
   Settings,
@@ -26,9 +24,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
   BarChart,
   Bar,
   LabelList,
@@ -68,26 +63,13 @@ function QuickLinkCard({ title, description, href, icon: Icon, count }: QuickLin
   );
 }
 
-const statusColors = {
-  paid: '#10b981',
-  partial: '#3b82f6',
-  unpaid: '#f59e0b',
-  overdue: '#ef4444',
-};
-
-const statusLabels = {
-  paid: 'ชำระแล้ว',
-  partial: 'ชำระบางส่วน',
-  unpaid: 'ค้างชำระ',
-  overdue: 'เกินกำหนด',
-};
 
 export function CommonFeeOverviewPage() {
   const navigate = useNavigate();
   const [data, setData] = useState<CommonFeeOverviewData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadData = async (filters: CommonFeeFilterState) => {
+  const loadData = async (filters: SiteFilterValues) => {
     setIsLoading(true);
     try {
       const result = await fetchCommonFeeOverview(filters);
@@ -97,41 +79,22 @@ export function CommonFeeOverviewPage() {
     }
   };
 
-  useEffect(() => {
-    loadData({ projectId: '', period: 'monthly', status: 'all' });
-  }, []);
-
-  const handleApplyFilters = (filters: CommonFeeFilterState) => {
+  const handleApplyFilters = (filters: SiteFilterValues) => {
     loadData(filters);
   };
 
-  if (isLoading || !data) {
-    return (
-      <div className="min-h-screen">
-        <PageHeader
-          title="ภาพรวมค่าส่วนกลาง"
-          subtitle="ระบบติดตามและจัดเก็บค่าส่วนกลาง"
-        />
-        <div className="p-8">
-          <div className="animate-pulse space-y-6">
-            <div className="h-32 bg-slate-200 rounded-xl" />
-            <div className="grid grid-cols-5 gap-6">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="h-32 bg-slate-200 rounded-xl" />
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Calculate percentages for paid and outstanding
+  const paidPercentage = data?.kpis.totalBilled.rawValue
+    ? ((data.kpis.totalPaid.rawValue || 0) / data.kpis.totalBilled.rawValue * 100).toFixed(1)
+    : '0';
+  const outstandingPercentage = data?.kpis.totalBilled.rawValue
+    ? ((data.kpis.totalOutstanding.rawValue || 0) / data.kpis.totalBilled.rawValue * 100).toFixed(1)
+    : '0';
 
-  const pieData = Object.entries(data.statusDistribution).map(([key, value]) => ({
-    name: statusLabels[key as keyof typeof statusLabels],
-    value,
-    color: statusColors[key as keyof typeof statusColors],
-    count: Math.round((data.syncInfo.totalUnits * value) / 100),
-  }));
+  // Use trend data directly from API (already filtered by year if specified)
+  const filteredTrend = data?.trend || [];
+  const trendUnit = data?.trendUnit || 'M';
+  const unitLabel = trendUnit === 'M' ? 'ล้านบาท' : trendUnit === 'K' ? 'พันบาท' : 'บาท';
 
   return (
     <div className="min-h-screen">
@@ -142,198 +105,243 @@ export function CommonFeeOverviewPage() {
 
       <div className="p-8">
         {/* Sync Status Bar */}
-        <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 mb-6">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-              <Database className="w-4 h-4 text-slate-500" />
-              <span className="text-sm text-slate-600">Last Sync:</span>
-              <span className="text-sm font-medium text-slate-800">{data.syncInfo.lastSyncAt}</span>
-            </div>
-            <div className="flex items-center gap-4 text-sm">
-              <div className="flex items-center gap-1.5">
-                <Building2 className="w-4 h-4 text-blue-500" />
-                <span className="text-slate-600">{data.syncInfo.totalProjects} โครงการ</span>
+        {data && (
+          <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 mb-6">
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2">
+                <Database className="w-4 h-4 text-slate-500" />
+                <span className="text-sm text-slate-600">Last Sync:</span>
+                <span className="text-sm font-medium text-slate-800">{data.syncInfo.lastSyncAt}</span>
+              </div>
+              <div className="flex items-center gap-4 text-sm">
+                <div className="flex items-center gap-1.5">
+                  <Building2 className="w-4 h-4 text-blue-500" />
+                  <span className="text-slate-600">{data.syncInfo.totalProjects} โครงการ</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Users className="w-4 h-4 text-emerald-500" />
+                  <span className="text-slate-600">{data.syncInfo.totalUnits.toLocaleString()} ยูนิต</span>
+                </div>
               </div>
               <div className="flex items-center gap-1.5">
-                <Users className="w-4 h-4 text-emerald-500" />
-                <span className="text-slate-600">{data.syncInfo.totalUnits.toLocaleString()} ยูนิต</span>
+                <CheckCircle className="w-4 h-4 text-emerald-500" />
+                <span className="text-sm text-emerald-600 font-medium">Synced</span>
               </div>
             </div>
-            <div className="flex items-center gap-1.5">
-              <CheckCircle className="w-4 h-4 text-emerald-500" />
-              <span className="text-sm text-emerald-600 font-medium">Synced</span>
-            </div>
+            <button
+              onClick={() => navigate('/reports/common-fee/settings')}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-600 hover:text-primary-600 hover:bg-slate-100 rounded-lg transition-colors"
+            >
+              <Settings className="w-4 h-4" />
+              จัดการโครงการ
+            </button>
           </div>
-          <button
-            onClick={() => navigate('/reports/common-fee/settings')}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-600 hover:text-primary-600 hover:bg-slate-100 rounded-lg transition-colors"
-          >
-            <Settings className="w-4 h-4" />
-            จัดการโครงการ
-          </button>
-        </div>
+        )}
 
         {/* Filters */}
-        <CommonFeeFilters onApply={handleApplyFilters} />
+        <SiteFilters
+          onApply={handleApplyFilters}
+          storageKey="common-fee-filters"
+          showYear={true}
+          showPeriod={true}
+          showStatus={true}
+        />
 
-        {/* KPI Cards - 5 cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+        {/* Loading State */}
+        {isLoading && (
+          <div className="animate-pulse space-y-6">
+            <div className="grid grid-cols-4 gap-4">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-32 bg-slate-200 rounded-xl" />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Main Content - only show when data is loaded */}
+        {!isLoading && data && (
+          <>
+
+        {/* KPI Cards - 4 cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <KPICard
-            title="ยอดเรียกเก็บทั้งหมด"
+            title="จำนวนโครงการ"
+            value={data.syncInfo.totalProjects}
+            icon={Building2}
+            color="blue"
+          />
+          <KPICard
+            title="ยอดเรียกเก็บ"
             value={data.kpis.totalBilled.value}
             change={data.kpis.totalBilled.change}
             changeType={data.kpis.totalBilled.changeType}
             icon={Wallet}
-            color="blue"
+            color="purple"
           />
           <KPICard
-            title="ยอดชำระแล้ว"
+            title="ยอดชำระ"
             value={data.kpis.totalPaid.value}
-            change={data.kpis.totalPaid.change}
-            changeType={data.kpis.totalPaid.changeType}
+            change={`${paidPercentage}%`}
+            changeType="positive"
+            showArrow={false}
             icon={CheckCircle}
             color="emerald"
           />
           <KPICard
             title="ยอดค้างชำระ"
             value={data.kpis.totalOutstanding.value}
-            change={data.kpis.totalOutstanding.change}
-            changeType={data.kpis.totalOutstanding.changeType}
+            change={`${outstandingPercentage}%`}
+            changeType="negative"
+            showArrow={false}
             icon={AlertCircle}
             color="amber"
           />
-          <KPICard
-            title="อัตราการจัดเก็บ"
-            value={data.kpis.collectionRate.value}
-            change={data.kpis.collectionRate.change}
-            changeType={data.kpis.collectionRate.changeType}
-            target={{ percentage: data.kpis.collectionRate.percentage }}
-            icon={TrendingUp}
-            color="purple"
-          />
-          <KPICard
-            title="ยูนิตค้างชำระ"
-            value={data.kpis.outstandingUnits.value}
-            change={data.kpis.outstandingUnits.change}
-            changeType={data.kpis.outstandingUnits.changeType}
-            icon={Users}
-            color="orange"
-          />
         </div>
 
-        {/* Status Distribution & Trend */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          {/* Status Distribution Pie Chart */}
-          <div className="card">
+        {/* Monthly Comparison Bar Chart */}
+        <div className="card mb-8">
             <div className="mb-4">
-              <h3 className="font-semibold text-slate-800">สถานะการจัดเก็บ</h3>
-              <p className="text-sm text-slate-500">สัดส่วนตามสถานะการชำระ</p>
+              <h3 className="font-semibold text-slate-800">เปรียบเทียบรายเดือน</h3>
+              <p className="text-sm text-slate-500">ยอดเรียกเก็บ / ชำระ / ค้างชำระ ({unitLabel})</p>
             </div>
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  cx="50%"
-                  cy="55%"
-                  innerRadius={50}
-                  outerRadius={80}
-                  paddingAngle={2}
-                  dataKey="value"
-                  label={({ name, value }) => `${name} ${value}%`}
-                  labelLine={{ stroke: '#94a3b8', strokeWidth: 1 }}
-                >
-                  {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const item = payload[0].payload;
-                    return (
-                      <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-lg">
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                          <span className="text-sm text-slate-700">{item.name}</span>
-                        </div>
-                        <p className="text-sm font-semibold text-slate-800 mt-1">{item.count.toLocaleString()} ยูนิต</p>
-                      </div>
-                    );
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Trend Chart */}
-          <div className="card lg:col-span-2">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="font-semibold text-slate-800">แนวโน้มการจัดเก็บ</h3>
-                <p className="text-sm text-slate-500">เปรียบเทียบยอดเรียกเก็บ vs ชำระแล้ว</p>
-              </div>
-              <select className="text-sm border border-slate-200 rounded-lg px-3 py-1.5">
-                <option>6 เดือนล่าสุด</option>
-                <option>12 เดือนล่าสุด</option>
-                <option>ปีนี้</option>
-              </select>
-            </div>
-            <ResponsiveContainer width="100%" height={240}>
-              <AreaChart data={data.trend} margin={{ top: 15, right: 30, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="billedGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="paidGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={filteredTrend} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="month" stroke="#64748b" fontSize={12} />
-                <YAxis stroke="#64748b" fontSize={12} />
+                <YAxis stroke="#64748b" fontSize={12} tickFormatter={(v) => v.toLocaleString()} />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: '#fff',
                     border: '1px solid #e2e8f0',
                     borderRadius: '8px',
                   }}
-                  formatter={(value: number) => [`฿${value.toLocaleString()}K`, '']}
+                  formatter={(value, name) => {
+                    const labels: Record<string, string> = {
+                      billed: 'เรียกเก็บ',
+                      paid: 'ชำระ',
+                      outstanding: 'ค้างชำระ',
+                    };
+                    const v = typeof value === 'number' ? value : 0;
+                    return [`฿${v.toLocaleString()} บาท`, labels[String(name)] || String(name)];
+                  }}
                 />
-                <Area
-                  type="linear"
-                  dataKey="billed"
-                  stroke="#3b82f6"
-                  strokeWidth={2}
-                  fill="url(#billedGradient)"
-                  name="เรียกเก็บ"
-                  dot={{ r: 2.5, fill: '#3b82f6' }}
-                >
-                  <LabelList dataKey="billed" position="top" fontSize={11} fill="#3b82f6" fontWeight={600} />
-                </Area>
-                <Area
-                  type="linear"
-                  dataKey="paid"
-                  stroke="#10b981"
-                  strokeWidth={2}
-                  fill="url(#paidGradient)"
-                  name="ชำระแล้ว"
-                  dot={{ r: 2.5, fill: '#10b981' }}
-                >
-                  <LabelList dataKey="paid" position="bottom" fontSize={11} fill="#10b981" fontWeight={600} />
-                </Area>
-              </AreaChart>
+                <Bar dataKey="billed" fill="#3b82f6" name="billed" radius={[4, 4, 0, 0]}>
+                  <LabelList dataKey="billed" position="top" fontSize={10} fill="#64748b" formatter={(v) => typeof v === 'number' && v > 0 ? v.toLocaleString() : ''} />
+                </Bar>
+                <Bar dataKey="paid" fill="#10b981" name="paid" radius={[4, 4, 0, 0]}>
+                  <LabelList dataKey="paid" position="top" fontSize={10} fill="#64748b" formatter={(v) => typeof v === 'number' && v > 0 ? v.toLocaleString() : ''} />
+                </Bar>
+                <Bar dataKey="outstanding" fill="#f59e0b" name="outstanding" radius={[4, 4, 0, 0]}>
+                  <LabelList dataKey="outstanding" position="top" fontSize={10} fill="#64748b" formatter={(v) => typeof v === 'number' && v > 0 ? v.toLocaleString() : ''} />
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
             <div className="flex justify-center gap-6 mt-2">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-blue-500 rounded" />
-                <span className="text-sm text-slate-600">ยอดเรียกเก็บ</span>
+                <span className="text-sm text-slate-600">เรียกเก็บ</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-emerald-500 rounded" />
-                <span className="text-sm text-slate-600">ยอดชำระแล้ว</span>
+                <span className="text-sm text-slate-600">ชำระ</span>
               </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-amber-500 rounded" />
+                <span className="text-sm text-slate-600">ค้างชำระ</span>
+              </div>
+            </div>
+        </div>
+
+        {/* Cumulative Trend Chart */}
+        <div className="card mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-semibold text-slate-800">ยอดสะสม</h3>
+              <p className="text-sm text-slate-500">เปรียบเทียบยอดสะสมตามเดือน ({unitLabel})</p>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart data={filteredTrend} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="cumBilledGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
+                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="cumPaidGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="cumOutstandingGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.2} />
+                  <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis dataKey="month" stroke="#64748b" fontSize={12} />
+              <YAxis stroke="#64748b" fontSize={12} tickFormatter={(v) => v.toLocaleString()} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#fff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '8px',
+                }}
+                formatter={(value, name) => {
+                  const labels: Record<string, string> = {
+                    cumBilled: 'สะสมเรียกเก็บ',
+                    cumPaid: 'สะสมชำระ',
+                    cumOutstanding: 'สะสมค้างชำระ',
+                  };
+                  const v = typeof value === 'number' ? value : 0;
+                  return [`฿${v.toLocaleString()} บาท`, labels[String(name)] || String(name)];
+                }}
+              />
+              <Area
+                type="monotone"
+                dataKey="cumBilled"
+                stroke="#3b82f6"
+                strokeWidth={2}
+                fill="url(#cumBilledGradient)"
+                name="cumBilled"
+                dot={{ r: 3, fill: '#3b82f6' }}
+              >
+                <LabelList dataKey="cumBilled" position="top" fontSize={10} fill="#3b82f6" formatter={(v) => typeof v === 'number' && v > 0 ? v.toLocaleString() : ''} />
+              </Area>
+              <Area
+                type="monotone"
+                dataKey="cumPaid"
+                stroke="#10b981"
+                strokeWidth={2}
+                fill="url(#cumPaidGradient)"
+                name="cumPaid"
+                dot={{ r: 3, fill: '#10b981' }}
+              >
+                <LabelList dataKey="cumPaid" position="top" fontSize={10} fill="#10b981" formatter={(v) => typeof v === 'number' && v > 0 ? v.toLocaleString() : ''} />
+              </Area>
+              <Area
+                type="monotone"
+                dataKey="cumOutstanding"
+                stroke="#f59e0b"
+                strokeWidth={2}
+                fill="url(#cumOutstandingGradient)"
+                name="cumOutstanding"
+                dot={{ r: 3, fill: '#f59e0b' }}
+              >
+                <LabelList dataKey="cumOutstanding" position="top" fontSize={10} fill="#f59e0b" formatter={(v) => typeof v === 'number' && v > 0 ? v.toLocaleString() : ''} />
+              </Area>
+            </AreaChart>
+          </ResponsiveContainer>
+          <div className="flex justify-center gap-6 mt-2">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-blue-500 rounded" />
+              <span className="text-sm text-slate-600">สะสมเรียกเก็บ</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-emerald-500 rounded" />
+              <span className="text-sm text-slate-600">สะสมชำระ</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-amber-500 rounded" />
+              <span className="text-sm text-slate-600">สะสมค้างชำระ</span>
             </div>
           </div>
         </div>
@@ -440,6 +448,8 @@ export function CommonFeeOverviewPage() {
             count={8}
           />
         </div>
+          </>
+        )}
       </div>
     </div>
   );

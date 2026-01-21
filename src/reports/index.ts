@@ -6,6 +6,7 @@ export {
   AgingReportPage,
   ExceptionPage,
   SettingsPage as CommonFeeSettingsPage,
+  ERDiagramPage,
 } from './common-fee';
 export {
   MaintenanceOverviewPage,
@@ -23,4 +24,5 @@ export {
   EmployeeDetailPage,
   MarketingPerformancePage,
   VPDetailPage,
+  PersonDetailPage,
 } from './sales-2025';

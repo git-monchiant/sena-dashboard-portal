@@ -1,0 +1,1 @@
+export { ERDiagramPage } from './page';

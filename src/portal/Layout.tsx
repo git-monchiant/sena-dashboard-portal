@@ -81,6 +81,7 @@ const reportModules: ReportModule[] = [
       { name: 'รายละเอียดการเรียกเก็บ', href: '/reports/common-fee/collection' },
       { name: 'Aging Report', href: '/reports/common-fee/aging' },
       { name: 'เคสพิเศษ / ติดตามผล', href: '/reports/common-fee/exception' },
+      { name: 'ER Diagram', href: '/reports/common-fee/er-diagram' },
       { name: 'ตั้งค่า', href: '/reports/common-fee/settings' },
     ],
   },
@@ -104,7 +105,7 @@ function Sidebar() {
   const location = useLocation();
   const { user } = useAuth();
   const [expandedModules, setExpandedModules] = useState<string[]>([
-    '2025 Performance',
+    'Common Fee Reports',
   ]);
 
   const toggleModule = (moduleName: string) => {
