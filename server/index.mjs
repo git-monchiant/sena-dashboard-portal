@@ -9,8 +9,10 @@ import cors from 'cors';
 import { testConnection, closePool } from './db/index.mjs';
 
 // Route modules
-import sales2025Routes from './routes/sales-2025.mjs';
+// import sales2025Routes from './routes/sales-2025.mjs'; // Old API - disabled
+import sales2025V2Routes from './routes/sales-2025-v2.mjs';
 import commonFeeRoutes from './routes/common-fee.mjs';
+import importWizardRoutes from './routes/import-wizard.mjs';
 
 const app = express();
 
@@ -24,11 +26,10 @@ app.get('/api/health', (req, res) => {
 });
 
 // Mount route modules
-app.use('/api/sales-2025', sales2025Routes);
+// app.use('/api/sales-2025', sales2025Routes); // Old API - disabled
+app.use('/api/sales-2025-v2', sales2025V2Routes);
 app.use('/api/common-fee', commonFeeRoutes);
-
-// TODO: Add more route modules here
-// app.use('/api/maintenance', maintenanceRoutes);
+app.use('/api/import', importWizardRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -59,9 +60,9 @@ async function startServer() {
   app.listen(PORT, () => {
     console.log(`🚀 API Server running on http://localhost:${PORT}`);
     console.log(`📊 Available modules:`);
-    console.log(`   - Sales 2025: /api/sales-2025`);
+    console.log(`   - Sales 2025: /api/sales-2025-v2`);
     console.log(`   - Common Fee: /api/common-fee`);
-    // console.log(`   - Maintenance: /api/maintenance`);
+    console.log(`   - Import Wizard: /api/import`);
   });
 }
 

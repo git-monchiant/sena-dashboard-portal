@@ -186,7 +186,7 @@ export function SalesPerformanceFilters({ onApply, initialFilters }: Props) {
   const initialLoadDone = useRef(false);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/sales-2025/filters`)
+    fetch(`${API_URL}/api/sales-2025-v2/filters`)
       .then(res => res.json())
       .then(data => {
         setOptions(data);

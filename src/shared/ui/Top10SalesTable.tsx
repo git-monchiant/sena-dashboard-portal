@@ -7,15 +7,15 @@ interface ProjectData {
   totals: {
     booking: number;
     livnex: number;
-    presaleTarget: number;
-    presaleActual: number;
+    contractTarget: number;
+    contractActual: number;
     revenueTarget: number;
     revenueActual: number;
     qualityLead: number;
     walk: number;
     book: number;
   };
-  presaleAchievePct: number;
+  contractAchievePct: number;
   revenueAchievePct: number;
 }
 
@@ -27,7 +27,7 @@ interface Top10SalesTableProps {
   storageKey?: string;
 }
 
-type SortBy = 'booking' | 'livnex' | 'presale_actual' | 'revenue_actual' | 'presale_pct' | 'revenue_pct';
+type SortBy = 'booking' | 'livnex' | 'contract_actual' | 'revenue_actual' | 'contract_pct' | 'revenue_pct';
 type SortDir = 'desc' | 'asc';
 
 interface TableState {
@@ -72,9 +72,9 @@ export function Top10SalesTable({ projects, onRowClick, formatCurrency, hideLead
   const sortLabels: Record<SortBy, string> = {
     booking: 'Booking',
     livnex: 'Livnex',
-    presale_actual: 'Presale Actual',
+    contract_actual: 'Contract Actual',
     revenue_actual: 'Revenue Actual',
-    presale_pct: 'Presale %',
+    contract_pct: 'Contract %',
     revenue_pct: 'Revenue %',
   };
 
@@ -97,7 +97,7 @@ export function Top10SalesTable({ projects, onRowClick, formatCurrency, hideLead
   const sortedProjects = [...projects]
     .map(p => ({
       ...p,
-      presale_pct: p.totals.presaleTarget > 0 ? (p.totals.presaleActual / p.totals.presaleTarget) * 100 : 0,
+      contract_pct: p.totals.contractTarget > 0 ? (p.totals.contractActual / p.totals.contractTarget) * 100 : 0,
       revenue_pct: p.totals.revenueTarget > 0 ? (p.totals.revenueActual / p.totals.revenueTarget) * 100 : 0,
     }))
     .sort((a, b) => {
@@ -105,9 +105,9 @@ export function Top10SalesTable({ projects, onRowClick, formatCurrency, hideLead
       switch (sortBy) {
         case 'booking': return (b.totals.booking - a.totals.booking) * multiplier;
         case 'livnex': return (b.totals.livnex - a.totals.livnex) * multiplier;
-        case 'presale_actual': return (b.totals.presaleActual - a.totals.presaleActual) * multiplier;
+        case 'contract_actual': return (b.totals.contractActual - a.totals.contractActual) * multiplier;
         case 'revenue_actual': return (b.totals.revenueActual - a.totals.revenueActual) * multiplier;
-        case 'presale_pct': return (b.presale_pct - a.presale_pct) * multiplier;
+        case 'contract_pct': return (b.contract_pct - a.contract_pct) * multiplier;
         case 'revenue_pct': return (b.revenue_pct - a.revenue_pct) * multiplier;
         default: return (b.totals.booking - a.totals.booking) * multiplier;
       }
@@ -140,8 +140,8 @@ export function Top10SalesTable({ projects, onRowClick, formatCurrency, hideLead
           >
             <option value="booking">Booking</option>
             <option value="livnex">Livnex</option>
-            <option value="presale_actual">Presale Actual</option>
-            <option value="presale_pct">Presale %</option>
+            <option value="contract_actual">Contract Actual</option>
+            <option value="contract_pct">Contract %</option>
             <option value="revenue_actual">Revenue Actual</option>
             <option value="revenue_pct">Revenue %</option>
           </select>
@@ -181,7 +181,7 @@ export function Top10SalesTable({ projects, onRowClick, formatCurrency, hideLead
               <th className="text-left py-2 px-3 font-semibold text-slate-600">Project</th>
               <th className="text-right py-2 px-3 font-semibold text-slate-600">Booking</th>
               <th className="text-right py-2 px-3 font-semibold text-slate-600">Livnex</th>
-              <th className="text-left py-2 px-3 font-semibold text-slate-600 min-w-[200px]">Presale</th>
+              <th className="text-left py-2 px-3 font-semibold text-slate-600 min-w-[200px]">Contract</th>
               <th className="text-left py-2 px-3 font-semibold text-slate-600 min-w-[200px]">Revenue</th>
               {!hideLeadColumns && (
                 <>
@@ -212,29 +212,29 @@ export function Top10SalesTable({ projects, onRowClick, formatCurrency, hideLead
                   <td className="py-2 px-3">
                     <div className="space-y-1">
                       <div className="flex items-baseline justify-between">
-                        <span className="text-sm font-semibold text-emerald-700">{formatCurrency(proj.totals.presaleActual)}</span>
+                        <span className="text-sm font-semibold text-emerald-700">{formatCurrency(proj.totals.contractActual)}</span>
                         <span className={`text-xs font-semibold ${
-                          proj.presaleAchievePct >= 80 ? 'text-emerald-600' :
-                          proj.presaleAchievePct >= 50 ? 'text-yellow-600' :
+                          proj.contractAchievePct >= 80 ? 'text-emerald-600' :
+                          proj.contractAchievePct >= 50 ? 'text-yellow-600' :
                           'text-red-500'
                         }`}>
-                          {proj.presaleAchievePct.toFixed(0)}%
+                          {proj.contractAchievePct.toFixed(0)}%
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="flex-1 relative h-2 bg-slate-100 rounded-full overflow-hidden">
                           <div
                             className={`absolute h-full rounded-full ${
-                              proj.presaleAchievePct >= 80 ? 'bg-emerald-500' :
-                              proj.presaleAchievePct >= 50 ? 'bg-yellow-500' :
+                              proj.contractAchievePct >= 80 ? 'bg-emerald-500' :
+                              proj.contractAchievePct >= 50 ? 'bg-yellow-500' :
                               'bg-red-500'
                             }`}
-                            style={{ width: `${Math.min(proj.presaleAchievePct, 100)}%` }}
+                            style={{ width: `${Math.min(proj.contractAchievePct, 100)}%` }}
                           />
                         </div>
                       </div>
                       <div className="text-[10px] text-slate-400 font-mono">
-                        Target: {formatCurrency(proj.totals.presaleTarget)}
+                        Target: {formatCurrency(proj.totals.contractTarget)}
                       </div>
                     </div>
                   </td>

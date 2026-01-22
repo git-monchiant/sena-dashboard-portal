@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   LayoutDashboard,
   FolderOpen,
@@ -11,6 +11,7 @@ import {
   Building2,
   Wrench,
   BarChart3,
+  Settings,
 } from 'lucide-react';
 import { useAuth } from '@shared/auth';
 
@@ -26,6 +27,13 @@ interface ReportModule {
   basePath: string;
   items: { name: string; href: string }[];
 }
+
+interface MenuVisibility {
+  hiddenCategories: string[];
+  hiddenItems: string[];
+}
+
+const MENU_VISIBILITY_KEY = 'menu-visibility';
 
 const navigation: NavItem[] = [
   {
@@ -99,14 +107,61 @@ const reportModules: ReportModule[] = [
       { name: 'ตั้งค่า', href: '/maintenance/settings' },
     ],
   },
+  {
+    name: 'Data Tools',
+    icon: Settings,
+    basePath: '/data-tools',
+    items: [
+      { name: 'Excel Import', href: '/data-tools/excel-import' },
+      { name: 'Menu Settings', href: '/data-tools/menu-settings' },
+    ],
+  },
 ];
 
 function Sidebar() {
   const location = useLocation();
   const { user } = useAuth();
   const [expandedModules, setExpandedModules] = useState<string[]>([
-    'Common Fee Reports',
+    '2025 Performance',
   ]);
+  const [menuVisibility, setMenuVisibility] = useState<MenuVisibility>({
+    hiddenCategories: [],
+    hiddenItems: [],
+  });
+
+  // Load menu visibility settings
+  useEffect(() => {
+    const loadVisibility = () => {
+      try {
+        const stored = localStorage.getItem(MENU_VISIBILITY_KEY);
+        if (stored) {
+          setMenuVisibility(JSON.parse(stored));
+        }
+      } catch {
+        // Ignore parse errors
+      }
+    };
+
+    loadVisibility();
+
+    // Listen for visibility changes
+    const handleVisibilityChange = () => loadVisibility();
+    window.addEventListener('menu-visibility-changed', handleVisibilityChange);
+    return () => window.removeEventListener('menu-visibility-changed', handleVisibilityChange);
+  }, []);
+
+  // Filter modules based on visibility
+  const visibleModules = useMemo(() => {
+    return reportModules
+      .filter((module) => !menuVisibility.hiddenCategories.includes(module.name))
+      .map((module) => ({
+        ...module,
+        items: module.items.filter(
+          (item) => !menuVisibility.hiddenItems.includes(item.href)
+        ),
+      }))
+      .filter((module) => module.items.length > 0);
+  }, [menuVisibility]);
 
   const toggleModule = (moduleName: string) => {
     setExpandedModules((prev) =>
@@ -168,7 +223,7 @@ function Sidebar() {
             Report Modules
           </p>
           <ul className="space-y-1">
-            {reportModules.map((module) => (
+            {visibleModules.map((module) => (
               <li key={module.name}>
                 <button
                   onClick={() => toggleModule(module.name)}
