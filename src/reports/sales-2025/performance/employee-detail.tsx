@@ -366,7 +366,11 @@ export function EmployeeDetailPage() {
                     backgroundColor: '#fff',
                     border: '1px solid #e2e8f0',
                     borderRadius: '8px',
+                    fontSize: '11px',
+                    padding: '8px 12px',
                   }}
+                  labelStyle={{ fontSize: '11px', fontWeight: 600, marginBottom: '4px' }}
+                  itemStyle={{ fontSize: '11px', padding: '2px 0' }}
                 />
                 <Legend
                   content={() => (
@@ -414,7 +418,11 @@ export function EmployeeDetailPage() {
                     backgroundColor: '#fff',
                     border: '1px solid #e2e8f0',
                     borderRadius: '8px',
+                    fontSize: '11px',
+                    padding: '8px 12px',
                   }}
+                  labelStyle={{ fontSize: '11px', fontWeight: 600, marginBottom: '4px' }}
+                  itemStyle={{ fontSize: '11px', padding: '2px 0' }}
                 />
                 <Legend
                   content={() => (

@@ -7,15 +7,14 @@ interface ProjectData {
   totals: {
     booking: number;
     livnex: number;
-    contractTarget: number;
-    contractActual: number;
+    contract: number;
+    presaleTarget: number; // Target สำหรับ Booking + Livnex + Contract
     revenueTarget: number;
     revenueActual: number;
     qualityLead: number;
     walk: number;
     book: number;
   };
-  contractAchievePct: number;
   revenueAchievePct: number;
 }
 
@@ -27,7 +26,7 @@ interface Top10SalesTableProps {
   storageKey?: string;
 }
 
-type SortBy = 'booking' | 'livnex' | 'contract_actual' | 'revenue_actual' | 'contract_pct' | 'revenue_pct';
+type SortBy = 'booking' | 'livnex' | 'contract' | 'revenue_actual' | 'booking_pct' | 'contract_pct' | 'revenue_pct';
 type SortDir = 'desc' | 'asc';
 
 interface TableState {
@@ -57,7 +56,7 @@ function saveTableState(key: string, state: TableState) {
 export function Top10SalesTable({ projects, onRowClick, formatCurrency, hideLeadColumns = false, storageKey = 'top10-sales-table' }: Top10SalesTableProps) {
   const [sortBy, setSortBy] = useState<SortBy>(() => {
     const saved = getTableState(storageKey);
-    return saved?.sortBy ?? 'booking';
+    return (saved?.sortBy as SortBy) ?? 'booking';
   });
   const [sortDir, setSortDir] = useState<SortDir>(() => {
     const saved = getTableState(storageKey);
@@ -72,8 +71,9 @@ export function Top10SalesTable({ projects, onRowClick, formatCurrency, hideLead
   const sortLabels: Record<SortBy, string> = {
     booking: 'Booking',
     livnex: 'Livnex',
-    contract_actual: 'Contract Actual',
-    revenue_actual: 'Revenue Actual',
+    contract: 'Contract',
+    revenue_actual: 'Revenue',
+    booking_pct: 'Booking %',
     contract_pct: 'Contract %',
     revenue_pct: 'Revenue %',
   };
@@ -97,7 +97,9 @@ export function Top10SalesTable({ projects, onRowClick, formatCurrency, hideLead
   const sortedProjects = [...projects]
     .map(p => ({
       ...p,
-      contract_pct: p.totals.contractTarget > 0 ? (p.totals.contractActual / p.totals.contractTarget) * 100 : 0,
+      booking_pct: p.totals.presaleTarget > 0 ? (p.totals.booking / p.totals.presaleTarget) * 100 : 0,
+      livnex_pct: p.totals.presaleTarget > 0 ? (p.totals.livnex / p.totals.presaleTarget) * 100 : 0,
+      contract_pct: p.totals.presaleTarget > 0 ? (p.totals.contract / p.totals.presaleTarget) * 100 : 0,
       revenue_pct: p.totals.revenueTarget > 0 ? (p.totals.revenueActual / p.totals.revenueTarget) * 100 : 0,
     }))
     .sort((a, b) => {
@@ -105,8 +107,9 @@ export function Top10SalesTable({ projects, onRowClick, formatCurrency, hideLead
       switch (sortBy) {
         case 'booking': return (b.totals.booking - a.totals.booking) * multiplier;
         case 'livnex': return (b.totals.livnex - a.totals.livnex) * multiplier;
-        case 'contract_actual': return (b.totals.contractActual - a.totals.contractActual) * multiplier;
+        case 'contract': return (b.totals.contract - a.totals.contract) * multiplier;
         case 'revenue_actual': return (b.totals.revenueActual - a.totals.revenueActual) * multiplier;
+        case 'booking_pct': return (b.booking_pct - a.booking_pct) * multiplier;
         case 'contract_pct': return (b.contract_pct - a.contract_pct) * multiplier;
         case 'revenue_pct': return (b.revenue_pct - a.revenue_pct) * multiplier;
         default: return (b.totals.booking - a.totals.booking) * multiplier;
@@ -114,8 +117,8 @@ export function Top10SalesTable({ projects, onRowClick, formatCurrency, hideLead
     });
 
   const filtered = sortedProjects.filter(p =>
-    p.projectCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.projectName.toLowerCase().includes(searchTerm.toLowerCase())
+    (p.projectCode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (p.projectName || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const display = showAll ? filtered : filtered.slice(0, 10);
@@ -139,10 +142,11 @@ export function Top10SalesTable({ projects, onRowClick, formatCurrency, hideLead
             className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
           >
             <option value="booking">Booking</option>
+            <option value="booking_pct">Booking %</option>
             <option value="livnex">Livnex</option>
-            <option value="contract_actual">Contract Actual</option>
+            <option value="contract">Contract</option>
             <option value="contract_pct">Contract %</option>
-            <option value="revenue_actual">Revenue Actual</option>
+            <option value="revenue_actual">Revenue</option>
             <option value="revenue_pct">Revenue %</option>
           </select>
           <select
@@ -179,10 +183,10 @@ export function Top10SalesTable({ projects, onRowClick, formatCurrency, hideLead
             <tr className="border-b border-slate-200 bg-slate-50">
               <th className="text-center py-2 px-3 font-semibold text-slate-600 w-10">#</th>
               <th className="text-left py-2 px-3 font-semibold text-slate-600">Project</th>
-              <th className="text-right py-2 px-3 font-semibold text-slate-600">Booking</th>
-              <th className="text-right py-2 px-3 font-semibold text-slate-600">Livnex</th>
-              <th className="text-left py-2 px-3 font-semibold text-slate-600 min-w-[200px]">Contract</th>
-              <th className="text-left py-2 px-3 font-semibold text-slate-600 min-w-[200px]">Revenue</th>
+              <th className="text-left py-2 px-3 font-semibold text-slate-600 min-w-[160px]">Booking</th>
+              <th className="text-left py-2 px-3 font-semibold text-slate-600 min-w-[160px]">Livnex</th>
+              <th className="text-left py-2 px-3 font-semibold text-slate-600 min-w-[160px]">Contract</th>
+              <th className="text-left py-2 px-3 font-semibold text-slate-600 min-w-[160px]">Revenue</th>
               {!hideLeadColumns && (
                 <>
                   <th className="text-center py-2 px-3 font-semibold text-slate-600">QL/Walk</th>
@@ -204,66 +208,126 @@ export function Top10SalesTable({ projects, onRowClick, formatCurrency, hideLead
                 >
                   <td className="py-2 px-3 text-center text-slate-400 font-medium">{idx + 1}</td>
                   <td className="py-2 px-3">
-                    <div className="font-medium text-blue-600">{proj.projectName}</div>
-                    <div className="text-xs text-slate-400">{proj.projectCode}</div>
+                    <div className="font-medium text-blue-600">{proj.projectName || '-'}</div>
+                    <div className="text-xs text-slate-400">{proj.projectCode || '-'}</div>
                   </td>
-                  <td className="py-2 px-3 text-right font-mono text-purple-600">{formatCurrency(proj.totals.booking)}</td>
-                  <td className="py-2 px-3 text-right font-mono text-orange-600">{formatCurrency(proj.totals.livnex)}</td>
+                  {/* Booking */}
                   <td className="py-2 px-3">
                     <div className="space-y-1">
                       <div className="flex items-baseline justify-between">
-                        <span className="text-sm font-semibold text-emerald-700">{formatCurrency(proj.totals.contractActual)}</span>
+                        <span className="text-sm font-semibold text-purple-700">{formatCurrency(proj.totals.booking)}</span>
                         <span className={`text-xs font-semibold ${
-                          proj.contractAchievePct >= 80 ? 'text-emerald-600' :
-                          proj.contractAchievePct >= 50 ? 'text-yellow-600' :
+                          proj.booking_pct >= 40 ? 'text-purple-600' :
+                          proj.booking_pct >= 20 ? 'text-yellow-600' :
                           'text-red-500'
                         }`}>
-                          {proj.contractAchievePct.toFixed(0)}%
+                          {(proj.booking_pct || 0).toFixed(0)}%
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="flex-1 relative h-2 bg-slate-100 rounded-full overflow-hidden">
                           <div
                             className={`absolute h-full rounded-full ${
-                              proj.contractAchievePct >= 80 ? 'bg-emerald-500' :
-                              proj.contractAchievePct >= 50 ? 'bg-yellow-500' :
+                              proj.booking_pct >= 40 ? 'bg-purple-500' :
+                              proj.booking_pct >= 20 ? 'bg-yellow-500' :
                               'bg-red-500'
                             }`}
-                            style={{ width: `${Math.min(proj.contractAchievePct, 100)}%` }}
+                            style={{ width: `${Math.min(proj.booking_pct || 0, 100)}%` }}
                           />
                         </div>
                       </div>
                       <div className="text-[10px] text-slate-400 font-mono">
-                        Target: {formatCurrency(proj.totals.contractTarget)}
+                        Booking Target: {formatCurrency(proj.totals.presaleTarget)}
                       </div>
                     </div>
                   </td>
+                  {/* Livnex */}
+                  <td className="py-2 px-3">
+                    <div className="space-y-1">
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-sm font-semibold text-orange-700">{formatCurrency(proj.totals.livnex)}</span>
+                        <span className={`text-xs font-semibold ${
+                          proj.livnex_pct >= 40 ? 'text-orange-600' :
+                          proj.livnex_pct >= 20 ? 'text-yellow-600' :
+                          'text-red-500'
+                        }`}>
+                          {(proj.livnex_pct || 0).toFixed(0)}%
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 relative h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className={`absolute h-full rounded-full ${
+                              proj.livnex_pct >= 40 ? 'bg-orange-500' :
+                              proj.livnex_pct >= 20 ? 'bg-yellow-500' :
+                              'bg-red-500'
+                            }`}
+                            style={{ width: `${Math.min(proj.livnex_pct || 0, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-mono">
+                        Livnex Target: {formatCurrency(proj.totals.presaleTarget)}
+                      </div>
+                    </div>
+                  </td>
+                  {/* Contract */}
+                  <td className="py-2 px-3">
+                    <div className="space-y-1">
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-sm font-semibold text-emerald-700">{formatCurrency(proj.totals.contract)}</span>
+                        <span className={`text-xs font-semibold ${
+                          proj.contract_pct >= 40 ? 'text-emerald-600' :
+                          proj.contract_pct >= 20 ? 'text-yellow-600' :
+                          'text-red-500'
+                        }`}>
+                          {(proj.contract_pct || 0).toFixed(0)}%
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 relative h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div
+                            className={`absolute h-full rounded-full ${
+                              proj.contract_pct >= 40 ? 'bg-emerald-500' :
+                              proj.contract_pct >= 20 ? 'bg-yellow-500' :
+                              'bg-red-500'
+                            }`}
+                            style={{ width: `${Math.min(proj.contract_pct || 0, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-mono">
+                        Contract Target: {formatCurrency(proj.totals.presaleTarget)}
+                      </div>
+                    </div>
+                  </td>
+                  {/* Revenue */}
                   <td className="py-2 px-3">
                     <div className="space-y-1">
                       <div className="flex items-baseline justify-between">
                         <span className="text-sm font-semibold text-blue-700">{formatCurrency(proj.totals.revenueActual)}</span>
                         <span className={`text-xs font-semibold ${
-                          proj.revenueAchievePct >= 80 ? 'text-blue-600' :
-                          proj.revenueAchievePct >= 50 ? 'text-yellow-600' :
+                          proj.revenue_pct >= 80 ? 'text-blue-600' :
+                          proj.revenue_pct >= 50 ? 'text-yellow-600' :
                           'text-red-500'
                         }`}>
-                          {proj.revenueAchievePct.toFixed(0)}%
+                          {(proj.revenue_pct || 0).toFixed(0)}%
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="flex-1 relative h-2 bg-slate-100 rounded-full overflow-hidden">
                           <div
                             className={`absolute h-full rounded-full ${
-                              proj.revenueAchievePct >= 80 ? 'bg-blue-500' :
-                              proj.revenueAchievePct >= 50 ? 'bg-yellow-500' :
+                              proj.revenue_pct >= 80 ? 'bg-blue-500' :
+                              proj.revenue_pct >= 50 ? 'bg-yellow-500' :
                               'bg-red-500'
                             }`}
-                            style={{ width: `${Math.min(proj.revenueAchievePct, 100)}%` }}
+                            style={{ width: `${Math.min(proj.revenue_pct || 0, 100)}%` }}
                           />
                         </div>
                       </div>
                       <div className="text-[10px] text-slate-400 font-mono">
-                        Target: {formatCurrency(proj.totals.revenueTarget)}
+                        Revenue Target: {formatCurrency(proj.totals.revenueTarget)}
                       </div>
                     </div>
                   </td>
@@ -299,6 +363,11 @@ export function Top10SalesTable({ projects, onRowClick, formatCurrency, hideLead
           </tbody>
         </table>
       </div>
+      {display.length === 0 && (
+        <div className="text-center py-8 text-slate-500">
+          ไม่พบข้อมูลโครงการ
+        </div>
+      )}
     </div>
   );
 }

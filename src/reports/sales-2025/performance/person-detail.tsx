@@ -11,6 +11,9 @@ import {
   ArrowLeft,
   Zap,
   Megaphone,
+  XCircle,
+  BookCheck,
+  Building,
 } from 'lucide-react';
 
 const API_URL = 'http://localhost:3001';
@@ -111,13 +114,13 @@ export function PersonDetailPage() {
       setIsLoading(true);
       try {
         // Try VP endpoint first
-        let res = await fetch(`${API_URL}/api/sales-2025/vp/${encodeURIComponent(name)}`);
+        let res = await fetch(`${API_URL}/api/sales-2025-v2/vp/${encodeURIComponent(name)}`);
         if (res.ok) {
           const data = await res.json();
           setPersonData(data);
         } else {
           // Fallback to employee endpoint (for MGR)
-          res = await fetch(`${API_URL}/api/sales-2025/employee/${encodeURIComponent(name)}`);
+          res = await fetch(`${API_URL}/api/sales-2025-v2/employee/${encodeURIComponent(name)}`);
           if (res.ok) {
             const empData = await res.json();
             // Transform employee data to match PersonData structure
@@ -134,49 +137,23 @@ export function PersonDetailPage() {
               mktPctBooking: 0,
             };
             // Transform projects to match the expected format
-            // Employee API returns projects with performance[] array, need to aggregate
-            interface PerformanceItem {
-              presale_target?: number;
-              presale_actual?: number;
-              revenue_target?: number;
-              revenue_actual?: number;
-              mkt_expense?: number;
-              total_lead?: number;
-              quality_lead?: number;
-              walk?: number;
-              book?: number;
-              booking?: number;
-              livnex?: number;
-            }
+            // Employee API returns projects with totals object directly
             const projects = (empData.projects || []).map((p: Record<string, unknown>) => {
-              // Aggregate totals from performance array
-              const performance = (p.performance || []) as PerformanceItem[];
-              const totals = performance.reduce((acc, q) => {
-                acc.presaleTarget += Number(q.presale_target) || 0;
-                acc.presaleActual += Number(q.presale_actual) || 0;
-                acc.revenueTarget += Number(q.revenue_target) || 0;
-                acc.revenueActual += Number(q.revenue_actual) || 0;
-                acc.mktExpense += Number(q.mkt_expense) || 0;
-                acc.totalLead += Number(q.total_lead) || 0;
-                acc.qualityLead += Number(q.quality_lead) || 0;
-                acc.walk += Number(q.walk) || 0;
-                acc.book += Number(q.book) || 0;
-                acc.booking += Number(q.booking) || 0;
-                acc.livnex += Number(q.livnex) || 0;
-                return acc;
-              }, {
-                presaleTarget: 0, presaleActual: 0,
-                revenueTarget: 0, revenueActual: 0,
-                mktExpense: 0, totalLead: 0, qualityLead: 0,
-                walk: 0, book: 0, booking: 0, livnex: 0,
-              });
-
-              const presaleAchievePct = totals.presaleTarget > 0
-                ? (totals.presaleActual / totals.presaleTarget) * 100
-                : 0;
-              const revenueAchievePct = totals.revenueTarget > 0
-                ? (totals.revenueActual / totals.revenueTarget) * 100
-                : 0;
+              // Use totals directly from API response
+              const apiTotals = p.totals as Record<string, unknown> || {};
+              const totals = {
+                presaleTarget: Number(apiTotals.presaleTarget) || 0,
+                presaleActual: Number(apiTotals.presaleActual) || 0,
+                revenueTarget: Number(apiTotals.revenueTarget) || 0,
+                revenueActual: Number(apiTotals.revenueActual) || 0,
+                mktExpense: Number(apiTotals.mktExpense) || 0,
+                totalLead: Number(apiTotals.totalLead) || 0,
+                qualityLead: Number(apiTotals.qualityLead) || 0,
+                walk: Number(apiTotals.walk) || 0,
+                book: Number(apiTotals.book) || 0,
+                booking: Number(apiTotals.booking) || 0,
+                livnex: Number(apiTotals.livnex) || 0,
+              };
 
               return {
                 projectCode: p.projectCode || p.project_code,
@@ -185,8 +162,8 @@ export function PersonDetailPage() {
                 months: p.months || [],
                 responsibleQuarters: p.responsibleQuarters || [],
                 totals,
-                presaleAchievePct,
-                revenueAchievePct,
+                presaleAchievePct: Number(p.presaleAchievePct) || 0,
+                revenueAchievePct: Number(p.revenueAchievePct) || 0,
               };
             });
             setPersonData({
@@ -295,57 +272,92 @@ export function PersonDetailPage() {
           กลับไปหน้ารายชื่อ
         </button>
 
-        {/* Sales KPI Cards */}
+        {/* Sales KPI Cards - matching page.tsx layout */}
         <div className="mb-8">
           <h3 className="text-lg font-semibold text-slate-800 mb-4">Sales Performance</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-6">
-          <KPICard
-            title="Projects"
-            value={personData.projectCount.toString()}
-            change="โครงการที่รับผิดชอบ"
-            changeType="neutral"
-            icon={Briefcase}
-            color="slate"
-          />
-          <KPICard
-            title="Total Booking"
-            value={formatCurrency(grandTotals.booking)}
-            change="YTD"
-            changeType="neutral"
-            icon={TrendingUp}
-            color="purple"
-          />
-          <KPICard
-            title="Total Livnex"
-            value={formatCurrency(grandTotals.livnex)}
-            change="YTD"
-            changeType="neutral"
-            icon={Zap}
-            color="orange"
-          />
-          <KPICard
-            title="Presale Actual"
-            value={formatCurrency(grandTotals.presaleActual)}
-            change={`${kpis.presaleAchievePct.toFixed(2)}% of target`}
-            changeType={kpis.presaleAchievePct >= 80 ? 'positive' : kpis.presaleAchievePct >= 60 ? 'warning' : 'negative'}
-            showArrow={false}
-            target={{ percentage: Math.round(Math.min(kpis.presaleAchievePct, 100) * 100) / 100 }}
-            subtext={`Target: ${formatCurrency(grandTotals.presaleTarget)}`}
-            icon={Target}
-            color="emerald"
-          />
-          <KPICard
-            title="Revenue Actual"
-            value={formatCurrency(grandTotals.revenueActual)}
-            change={`${kpis.revenueAchievePct.toFixed(2)}% of target`}
-            changeType={kpis.revenueAchievePct >= 80 ? 'positive' : kpis.revenueAchievePct >= 60 ? 'warning' : 'negative'}
-            showArrow={false}
-            target={{ percentage: Math.round(Math.min(kpis.revenueAchievePct, 100) * 100) / 100 }}
-            subtext={`Target: ${formatCurrency(grandTotals.revenueTarget)}`}
-            icon={DollarSign}
-            color="blue"
-          />
-          </div>
+          {(() => {
+            // Calculate derived values for KPI cards (matching page.tsx)
+            const totalBooking = grandTotals.booking || 0;
+            const totalLivnex = grandTotals.livnex || 0;
+            const totalContract = grandTotals.presaleActual - totalBooking - totalLivnex; // Contract = Presale - Booking - Livnex
+            const totalCancel = 0; // Cancel not tracked in person data yet
+            const totalPresaleTarget = grandTotals.presaleTarget || 0;
+            const totalLivnexTarget = grandTotals.presaleTarget * 0.3 || 0; // Estimate Livnex target as 30% of presale
+            const totalRevenueTarget = grandTotals.revenueTarget || 0;
+            const totalRevenueActual = grandTotals.revenueActual || 0;
+
+            const bookingAchieve = totalPresaleTarget > 0 ? (totalBooking / totalPresaleTarget) * 100 : 0;
+            const livnexAchieve = totalLivnexTarget > 0 ? (totalLivnex / totalLivnexTarget) * 100 : 0;
+            const contractAchieve = totalPresaleTarget > 0 ? (totalContract / totalPresaleTarget) * 100 : 0;
+            const revenueAchieve = totalRevenueTarget > 0 ? (totalRevenueActual / totalRevenueTarget) * 100 : 0;
+
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 mb-6">
+                <KPICard
+                  title="Projects"
+                  value={personData.projectCount.toString()}
+                  change={`${projects.length} records`}
+                  changeType="neutral"
+                  icon={Building}
+                  color="slate"
+                />
+                <KPICard
+                  title="Booking"
+                  value={formatCurrency(totalBooking)}
+                  change=" "
+                  changeType={bookingAchieve >= 40 ? 'positive' : bookingAchieve >= 20 ? 'warning' : 'negative'}
+                  showArrow={false}
+                  target={{ percentage: Math.round(Math.min(bookingAchieve, 100) * 100) / 100 }}
+                  subtext={`${bookingAchieve.toFixed(1)}% of Target (${formatCurrency(totalPresaleTarget)})`}
+                  icon={TrendingUp}
+                  color="purple"
+                />
+                <KPICard
+                  title="Contract"
+                  value={formatCurrency(Math.max(totalContract, 0))}
+                  change=" "
+                  changeType={contractAchieve >= 40 ? 'positive' : contractAchieve >= 20 ? 'warning' : 'negative'}
+                  showArrow={false}
+                  target={{ percentage: Math.round(Math.min(Math.max(contractAchieve, 0), 100) * 100) / 100 }}
+                  subtext={`${Math.max(contractAchieve, 0).toFixed(1)}% of Target (${formatCurrency(totalPresaleTarget)})`}
+                  icon={Target}
+                  color="emerald"
+                />
+                <KPICard
+                  title="Revenue"
+                  value={formatCurrency(totalRevenueActual)}
+                  change=" "
+                  changeType={revenueAchieve >= 80 ? 'positive' : revenueAchieve >= 60 ? 'warning' : 'negative'}
+                  showArrow={false}
+                  target={{ percentage: Math.round(Math.min(revenueAchieve, 100) * 100) / 100 }}
+                  subtext={`${revenueAchieve.toFixed(1)}% of Target (${formatCurrency(totalRevenueTarget)})`}
+                  icon={DollarSign}
+                  color="blue"
+                />
+                <KPICard
+                  title="Livnex"
+                  value={formatCurrency(totalLivnex)}
+                  change=" "
+                  changeType={livnexAchieve >= 40 ? 'positive' : livnexAchieve >= 20 ? 'warning' : 'negative'}
+                  showArrow={false}
+                  target={{ percentage: Math.round(Math.min(livnexAchieve, 100) * 100) / 100 }}
+                  subtext={`${livnexAchieve.toFixed(1)}% of Target (${formatCurrency(totalLivnexTarget)})`}
+                  icon={Zap}
+                  color="orange"
+                />
+                <KPICard
+                  title="Cancel"
+                  value={formatCurrency(totalCancel)}
+                  change=" "
+                  changeType={totalCancel > 0 ? 'negative' : 'positive'}
+                  showArrow={false}
+                  subtext={`${totalBooking > 0 ? ((totalCancel / totalBooking) * 100).toFixed(1) : 0}% of Booking`}
+                  icon={XCircle}
+                  color="red"
+                />
+              </div>
+            );
+          })()}
 
           {/* Lead Conversion Funnel - Show for VP and Sales MGR */}
           {showLeadFunnel && (
@@ -372,44 +384,83 @@ export function PersonDetailPage() {
           )}
         </div>
 
-        {/* Marketing KPI Cards */}
+        {/* Marketing KPI Cards - matching marketing-performance.tsx layout */}
         <div className="mb-8">
           <h3 className="text-lg font-semibold text-slate-800 mb-4">Marketing Performance</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <KPICard
-            title="MKT Expense (YTD)"
-            value={formatCurrency(grandTotals.mktExpense)}
-            change="ค่าใช้จ่าย Marketing"
-            changeType="neutral"
-            icon={DollarSign}
-            color="orange"
-          />
-          <KPICard
-            title="Total Lead"
-            value={grandTotals.totalLead.toLocaleString()}
-            change={`CPL: ฿${kpis.avgCPL.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
-            changeType="neutral"
-            icon={Users}
-            color="purple"
-          />
-          <KPICard
-            title="Quality Lead"
-            value={grandTotals.qualityLead.toLocaleString()}
-            change={`CPQL: ฿${kpis.avgCPQL.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
-            changeType="neutral"
-            icon={Target}
-            color="emerald"
-          />
-          <KPICard
-            title="Lead Quality"
-            value={`${grandTotals.totalLead.toLocaleString()} / ${grandTotals.qualityLead.toLocaleString()}`}
-            change={`Quality Rate: ${grandTotals.totalLead > 0 ? ((grandTotals.qualityLead / grandTotals.totalLead) * 100).toFixed(1) : 0}%`}
-            changeType={grandTotals.totalLead > 0 ? (((grandTotals.qualityLead / grandTotals.totalLead) * 100) >= 80 ? 'positive' : ((grandTotals.qualityLead / grandTotals.totalLead) * 100) >= 60 ? 'warning' : 'negative') : 'neutral'}
-            showArrow={false}
-            icon={TrendingDown}
-            color="slate"
-          />
-          </div>
+          {(() => {
+            // Calculate derived values for Marketing KPI cards (matching marketing-performance.tsx)
+            const totalMktExpense = grandTotals.mktExpense || 0;
+            const totalLead = grandTotals.totalLead || 0;
+            const totalQualityLead = grandTotals.qualityLead || 0;
+            const totalBook = grandTotals.book || 0;
+            const cpl = kpis.avgCPL || 0;
+            const cpql = kpis.avgCPQL || 0;
+            const cpb = totalBook > 0 ? totalMktExpense / totalBook : 0;
+
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
+                <KPICard
+                  title="Projects"
+                  value={personData.projectCount.toString()}
+                  change={`${projects.length} records`}
+                  changeType="neutral"
+                  subtext=" "
+                  icon={Building}
+                  color="slate"
+                />
+                <KPICard
+                  title="MKT Expense (YTD)"
+                  value={formatCurrency(totalMktExpense)}
+                  change=" "
+                  changeType="neutral"
+                  showArrow={false}
+                  subtext="ค่าใช้จ่าย Marketing"
+                  icon={DollarSign}
+                  color="orange"
+                />
+                <KPICard
+                  title="Total Lead"
+                  value={totalLead.toLocaleString()}
+                  change=" "
+                  changeType="neutral"
+                  showArrow={false}
+                  subtext={`CPL: ฿${cpl.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+                  icon={Users}
+                  color="purple"
+                />
+                <KPICard
+                  title="Quality Lead"
+                  value={totalQualityLead.toLocaleString()}
+                  change=" "
+                  changeType="neutral"
+                  showArrow={false}
+                  subtext={`CPQL: ฿${cpql.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+                  icon={Target}
+                  color="emerald"
+                />
+                <KPICard
+                  title="CPB (Cost/Book)"
+                  value={`฿${cpb.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+                  change=" "
+                  changeType="neutral"
+                  showArrow={false}
+                  subtext={`${totalBook.toLocaleString()} Bookings`}
+                  icon={BookCheck}
+                  color="blue"
+                />
+                <KPICard
+                  title="Lead Quality"
+                  value={`${totalLead > 0 ? ((totalQualityLead / totalLead) * 100).toFixed(1) : 0}%`}
+                  change=" "
+                  changeType="neutral"
+                  showArrow={false}
+                  subtext={`${totalLead.toLocaleString()} Lead → ${totalQualityLead.toLocaleString()} QL`}
+                  icon={TrendingDown}
+                  color="slate"
+                />
+              </div>
+            );
+          })()}
 
           {/* Top 10 Projects by Marketing - Hide for Sales MGR */}
           {showMktTable && (

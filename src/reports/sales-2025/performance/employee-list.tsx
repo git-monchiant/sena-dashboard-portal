@@ -134,6 +134,9 @@ interface Employee {
   totalRevenueActual: number;
   presaleAchievePct: number;
   revenueAchievePct: number;
+  mktExpense: number;
+  totalBook: number;
+  cpb: number;
 }
 
 function formatNumber(num: number | string): string {
@@ -210,7 +213,7 @@ export function EmployeeListPage() {
     const loadEmployees = async () => {
       setIsLoading(true);
       try {
-        const url = `${API_URL}/api/sales-2025/employees?all=true`;
+        const url = `${API_URL}/api/sales-2025-v2/employees?all=true`;
         const res = await fetch(url);
         const data = await res.json();
         setEmployees(data.employees || []);
@@ -335,15 +338,11 @@ export function EmployeeListPage() {
                 <tr className="border-b border-slate-200">
                   <th className="text-left py-3 px-4 font-semibold text-slate-600">Name</th>
                   <th className="text-left py-3 px-4 font-semibold text-slate-600">BUD</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-600">Type</th>
-                  <th className="text-left py-3 px-4 font-semibold text-slate-600">Position</th>
                   <th className="text-center py-3 px-4 font-semibold text-slate-600">Projects</th>
-                  <th className="text-right py-3 px-4 font-semibold text-slate-600">Presale Target</th>
-                  <th className="text-right py-3 px-4 font-semibold text-slate-600">Presale Actual</th>
-                  <th className="text-right py-3 px-4 font-semibold text-slate-600">%</th>
-                  <th className="text-right py-3 px-4 font-semibold text-slate-600">Revenue Target</th>
-                  <th className="text-right py-3 px-4 font-semibold text-slate-600">Revenue Actual</th>
-                  <th className="text-right py-3 px-4 font-semibold text-slate-600">%</th>
+                  <th className="text-left py-3 px-4 font-semibold text-slate-600 min-w-[200px]">Presale (Target / Actual)</th>
+                  <th className="text-left py-3 px-4 font-semibold text-slate-600 min-w-[200px]">Revenue (Target / Actual)</th>
+                  <th className="text-right py-3 px-4 font-semibold text-slate-600">MKT Expense</th>
+                  <th className="text-right py-3 px-4 font-semibold text-slate-600">CPB</th>
                 </tr>
               </thead>
               <tbody>
@@ -367,46 +366,84 @@ export function EmployeeListPage() {
                           ))}
                         </div>
                       </td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${getTypeBadgeClass(empType)}`}>
-                          {empType}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-slate-600">{emp.position}</td>
                       <td className="py-3 px-4 text-center">
                         <span className="px-2 py-1 bg-slate-100 rounded text-xs font-medium">
                           {emp.projectCount}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-right font-mono text-slate-500">
-                        {formatCurrency(emp.totalPresaleTarget)}
+                      {/* Presale with Progress Bar */}
+                      <td className="py-3 px-4">
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-slate-500">Target: {formatCurrency(emp.totalPresaleTarget)}</span>
+                            <span className={`font-medium ${
+                              emp.presaleAchievePct >= 0.8 ? 'text-emerald-600' :
+                              emp.presaleAchievePct >= 0.6 ? 'text-amber-600' :
+                              'text-red-600'
+                            }`}>
+                              {(emp.presaleAchievePct * 100).toFixed(0)}%
+                            </span>
+                          </div>
+                          <div className="relative h-2 bg-slate-100 rounded-full overflow-hidden">
+                            <div
+                              className="absolute h-full bg-slate-200 rounded-full"
+                              style={{ width: '100%' }}
+                            />
+                            <div
+                              className={`absolute h-full rounded-full ${
+                                emp.presaleAchievePct >= 0.8 ? 'bg-emerald-400' :
+                                emp.presaleAchievePct >= 0.6 ? 'bg-amber-400' :
+                                'bg-red-400'
+                              }`}
+                              style={{ width: `${Math.min(100, emp.presaleAchievePct * 100)}%` }}
+                            />
+                          </div>
+                          <div className="text-xs text-slate-700 font-medium">
+                            Actual: {formatCurrency(emp.totalPresaleActual)}
+                          </div>
+                        </div>
                       </td>
-                      <td className="py-3 px-4 text-right font-mono">
-                        {formatCurrency(emp.totalPresaleActual)}
+                      {/* Revenue with Progress Bar */}
+                      <td className="py-3 px-4">
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs">
+                            <span className="text-slate-500">Target: {formatCurrency(emp.totalRevenueTarget)}</span>
+                            <span className={`font-medium ${
+                              emp.revenueAchievePct >= 0.8 ? 'text-emerald-600' :
+                              emp.revenueAchievePct >= 0.6 ? 'text-amber-600' :
+                              'text-red-600'
+                            }`}>
+                              {(emp.revenueAchievePct * 100).toFixed(0)}%
+                            </span>
+                          </div>
+                          <div className="relative h-2 bg-slate-100 rounded-full overflow-hidden">
+                            <div
+                              className="absolute h-full bg-slate-200 rounded-full"
+                              style={{ width: '100%' }}
+                            />
+                            <div
+                              className={`absolute h-full rounded-full ${
+                                emp.revenueAchievePct >= 0.8 ? 'bg-emerald-400' :
+                                emp.revenueAchievePct >= 0.6 ? 'bg-amber-400' :
+                                'bg-red-400'
+                              }`}
+                              style={{ width: `${Math.min(100, emp.revenueAchievePct * 100)}%` }}
+                            />
+                          </div>
+                          <div className="text-xs text-slate-700 font-medium">
+                            Actual: {formatCurrency(emp.totalRevenueActual)}
+                          </div>
+                        </div>
                       </td>
+                      {/* MKT Expense */}
                       <td className="py-3 px-4 text-right">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          emp.presaleAchievePct >= 0.8 ? 'bg-emerald-100 text-emerald-700' :
-                          emp.presaleAchievePct >= 0.6 ? 'bg-amber-100 text-amber-700' :
-                          'bg-red-100 text-red-700'
-                        }`}>
-                          {(emp.presaleAchievePct * 100).toFixed(0)}%
-                        </span>
+                        <div className="font-medium text-orange-600">{formatCurrency(emp.mktExpense || 0)}</div>
+                        <div className="text-[10px] text-slate-400">{(emp.totalBook || 0).toLocaleString()} Books</div>
                       </td>
-                      <td className="py-3 px-4 text-right font-mono text-slate-500">
-                        {formatCurrency(emp.totalRevenueTarget)}
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono">
-                        {formatCurrency(emp.totalRevenueActual)}
-                      </td>
+                      {/* CPB */}
                       <td className="py-3 px-4 text-right">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          emp.revenueAchievePct >= 0.8 ? 'bg-emerald-100 text-emerald-700' :
-                          emp.revenueAchievePct >= 0.6 ? 'bg-amber-100 text-amber-700' :
-                          'bg-red-100 text-red-700'
-                        }`}>
-                          {(emp.revenueAchievePct * 100).toFixed(0)}%
-                        </span>
+                        <div className="font-medium text-blue-600">{formatCurrency(emp.cpb || 0)}</div>
+                        <div className="text-[10px] text-slate-400">Cost/Book</div>
                       </td>
                     </tr>
                   );

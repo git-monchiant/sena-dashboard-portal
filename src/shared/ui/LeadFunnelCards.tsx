@@ -42,7 +42,7 @@ export function LeadFunnelCards({ totals, quarters, embedded = false }: LeadFunn
   ];
 
   return (
-    <div className={embedded ? 'mt-6 pt-6 border-t border-slate-100' : 'mb-8'}>
+    <div className={embedded ? '' : 'mb-8'}>
       <div className="mb-4">
         <h3 className="font-semibold text-slate-800">Lead Conversion Funnel</h3>
         <p className="text-sm text-slate-500">Total Lead → Quality Lead → Walk → Book</p>
@@ -80,14 +80,14 @@ export function LeadFunnelCards({ totals, quarters, embedded = false }: LeadFunn
                 <div className="space-y-2">
                   {[
                     { name: 'Lead', value: period.lead, color: 'bg-slate-400', diff: leadDiffPct, ratio: null },
-                    { name: 'QL', value: period.ql, color: 'bg-violet-500', diff: qlDiffPct, ratio: period.ql > 0 ? period.lead / period.ql : null },
+                    { name: 'Quality Lead', value: period.ql, color: 'bg-violet-500', diff: qlDiffPct, ratio: period.ql > 0 ? period.lead / period.ql : null },
                     { name: 'Walk', value: period.walk, color: 'bg-emerald-500', diff: walkDiffPct, ratio: period.walk > 0 ? period.ql / period.walk : null },
                     { name: 'Book', value: period.book, color: 'bg-blue-500', diff: bookDiffPct, ratio: period.book > 0 ? period.walk / period.book : null },
                   ].map((item, i) => {
                     const barWidth = maxVal > 0 ? (item.value / maxVal) * 100 : 0;
                     return (
                       <div key={i} className="flex items-center gap-2">
-                        <div className="w-10 text-xs text-slate-500 text-right">{item.name}</div>
+                        <div className="w-20 text-xs text-slate-500 text-right">{item.name}</div>
                         <div className="flex-1 h-4 bg-slate-100 rounded overflow-hidden">
                           <div
                             className={`h-full ${item.color} rounded`}
@@ -114,9 +114,9 @@ export function LeadFunnelCards({ totals, quarters, embedded = false }: LeadFunn
                   })}
                 </div>
               <div className="mt-3 pt-2 border-t border-slate-100 text-xs text-slate-500 flex items-center justify-between gap-2">
-                <span>L→QL: <span className="text-violet-600 font-medium">{qlPct}%</span></span>
-                <span>QL→W: <span className="text-emerald-600 font-medium">{walkPct}%</span></span>
-                <span>W→B: <span className="text-blue-600 font-medium">{bookPct}%</span></span>
+                <span>Lead→QL: <span className="text-violet-600 font-medium">{qlPct}%</span></span>
+                <span>QL→Walk: <span className="text-emerald-600 font-medium">{walkPct}%</span></span>
+                <span>Walk→Book: <span className="text-blue-600 font-medium">{bookPct}%</span></span>
               </div>
               </div>
             </div>

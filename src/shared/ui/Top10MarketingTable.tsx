@@ -124,8 +124,8 @@ export function Top10MarketingTable({ projects, onRowClick, formatCurrency, stor
     });
 
   const filtered = sortedProjects.filter(p =>
-    p.projectCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.projectName.toLowerCase().includes(searchTerm.toLowerCase())
+    (p.projectCode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (p.projectName || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const display = showAll ? filtered : filtered.slice(0, 10);

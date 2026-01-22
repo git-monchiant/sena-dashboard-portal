@@ -24,35 +24,25 @@ import {
 
 const API_URL = 'http://localhost:3001';
 
-interface PerformanceRow {
-  bud: string;
-  opm: string;
-  project_code: string;
-  project_name: string;
+interface QuarterlyData {
   quarter: string;
-  booking_actual: number;
-  presale_target: number;
-  presale_actual: number;
-  presale_achieve_pct: number;
-  revenue_target: number;
-  revenue_actual: number;
-  revenue_achieve_pct: number;
-  mkt_expense_actual: number;
-  // Marketing fields
-  total_lead: number;
-  quality_lead: number;
+  presaleTarget: number;
+  presaleActual: number;
+  booking: number;
+  contract: number;
+  revenueTarget: number;
+  revenue: number;
+  mktExpense: number;
+  totalLead: number;
+  qualityLead: number;
   walk: number;
   book: number;
-  lead_to_walk: number;
-  walk_to_book: number;
-  cpl: number;
-  cpql: number;
-  mkt_pct_booking: number;
-  mkt_pct_presale_livnex: number;
-  mkt_pct_revenue: number;
+  projectName?: string;
+  bud?: string;
 }
 
 interface TeamMember {
+  department: string;
   roleType: string;
   name: string;
   position: string;
@@ -61,11 +51,8 @@ interface TeamMember {
 
 function formatNumber(num: number | string): string {
   const n = typeof num === 'string' ? parseFloat(num) : num;
-  if (isNaN(n)) return '0.00';
-  if (n >= 1000000) {
-    return `${(n / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}M`;
-  }
-  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (isNaN(n)) return '0.00M';
+  return `${(n / 1000000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}M`;
 }
 
 function formatCurrency(num: number): string {
@@ -75,7 +62,7 @@ function formatCurrency(num: number): string {
 export function ProjectDetailPage() {
   const { projectCode } = useParams<{ projectCode: string }>();
   const navigate = useNavigate();
-  const [data, setData] = useState<PerformanceRow[]>([]);
+  const [data, setData] = useState<QuarterlyData[]>([]);
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -85,16 +72,13 @@ export function ProjectDetailPage() {
     const loadData = async () => {
       setIsLoading(true);
       try {
-        const [perfRes, teamRes] = await Promise.all([
-          fetch(`${API_URL}/api/sales-2025/performance?project=${projectCode}`),
-          fetch(`${API_URL}/api/sales-2025/team/${projectCode}`),
-        ]);
+        const res = await fetch(`${API_URL}/api/sales-2025-v2/project/${projectCode}`);
+        const projectData = await res.json();
 
-        const perfData = await perfRes.json();
-        const teamData = await teamRes.json();
-
-        setData(perfData);
-        setTeam(teamData);
+        // Transform to quarterly data format for chart
+        const quarterlyData = projectData.quarterlyData || [];
+        setData(quarterlyData);
+        setTeam(projectData.team || []);
       } catch (err) {
         console.error('Failed to load data:', err);
       } finally {
@@ -126,20 +110,20 @@ export function ProjectDetailPage() {
     );
   }
 
-  const projectName = data[0]?.project_name || projectCode;
+  const projectName = data[0]?.projectName || projectCode;
   const bud = data[0]?.bud || '';
 
-  // Calculate totals
-  const totalPresaleTarget = data.reduce((sum, r) => sum + Number(r.presale_target), 0);
-  const totalPresaleActual = data.reduce((sum, r) => sum + Number(r.presale_actual), 0);
-  const totalRevenueTarget = data.reduce((sum, r) => sum + Number(r.revenue_target), 0);
-  const totalRevenueActual = data.reduce((sum, r) => sum + Number(r.revenue_actual), 0);
-  const totalBooking = data.reduce((sum, r) => sum + Number(r.booking_actual), 0);
-  const totalMktExpense = data.reduce((sum, r) => sum + Number(r.mkt_expense_actual), 0);
+  // Calculate totals from quarterlyData (camelCase)
+  const totalPresaleTarget = data.reduce((sum, r) => sum + Number(r.presaleTarget || 0), 0);
+  const totalPresaleActual = data.reduce((sum, r) => sum + Number(r.presaleActual || 0), 0);
+  const totalRevenueTarget = data.reduce((sum, r) => sum + Number(r.revenueTarget || 0), 0);
+  const totalRevenueActual = data.reduce((sum, r) => sum + Number(r.revenue || 0), 0);
+  const totalBooking = data.reduce((sum, r) => sum + Number(r.booking || 0), 0);
+  const totalMktExpense = data.reduce((sum, r) => sum + Number(r.mktExpense || 0), 0);
 
   // Marketing totals
-  const totalLead = data.reduce((sum, r) => sum + Number(r.total_lead || 0), 0);
-  const totalQualityLead = data.reduce((sum, r) => sum + Number(r.quality_lead || 0), 0);
+  const totalLead = data.reduce((sum, r) => sum + Number(r.totalLead || 0), 0);
+  const totalQualityLead = data.reduce((sum, r) => sum + Number(r.qualityLead || 0), 0);
   const totalWalk = data.reduce((sum, r) => sum + Number(r.walk || 0), 0);
   const totalBook = data.reduce((sum, r) => sum + Number(r.book || 0), 0);
 
@@ -149,31 +133,32 @@ export function ProjectDetailPage() {
   // Marketing metrics
   const avgCPL = totalLead > 0 ? totalMktExpense / totalLead : 0;
   const avgCPQL = totalQualityLead > 0 ? totalMktExpense / totalQualityLead : 0;
+  const avgCPB = totalBook > 0 ? totalMktExpense / totalBook : 0;
   const mktPctBooking = totalBooking > 0 ? (totalMktExpense / totalBooking) * 100 : 0;
   const mktPctPresale = totalPresaleActual > 0 ? (totalMktExpense / totalPresaleActual) * 100 : 0;
   const mktPctRevenue = totalRevenueActual > 0 ? (totalMktExpense / totalRevenueActual) * 100 : 0;
   const leadToWalkPct = totalQualityLead > 0 ? (totalWalk / totalQualityLead) * 100 : 0;
   const walkToBookPct = totalWalk > 0 ? (totalBook / totalWalk) * 100 : 0;
 
-  // Chart data by quarter
+  // Chart data by quarter (camelCase from API)
   const chartData = data.map(d => ({
     quarter: d.quarter,
-    'Presale Target': Number(d.presale_target),
-    'Presale Actual': Number(d.presale_actual),
-    'Revenue Target': Number(d.revenue_target),
-    'Revenue Actual': Number(d.revenue_actual),
-    'Booking': Number(d.booking_actual),
+    'Presale Target': Number(d.presaleTarget || 0),
+    'Presale Actual': Number(d.presaleActual || 0),
+    'Revenue Target': Number(d.revenueTarget || 0),
+    'Revenue Actual': Number(d.revenue || 0),
+    'Booking': Number(d.booking || 0),
   }));
 
   // Lead Funnel chart data with ratios
   const leadFunnelData = data.map(d => {
-    const totalLead = Number(d.total_lead || 0);
-    const qualityLead = Number(d.quality_lead || 0);
+    const totalLead = Number(d.totalLead || 0);
+    const qualityLead = Number(d.qualityLead || 0);
     const walk = Number(d.walk || 0);
     const book = Number(d.book || 0);
     const leadToQLPct = totalLead > 0 ? ((qualityLead / totalLead) * 100).toFixed(1) : '0';
     const qlToWalkPct = qualityLead > 0 ? ((walk / qualityLead) * 100).toFixed(1) : '0';
-    const walkToBookPct = walk > 0 ? ((book / walk) * 100).toFixed(1) : '0';
+    const walkToBookPctVal = walk > 0 ? ((book / walk) * 100).toFixed(1) : '0';
     const leadToQLRatio = qualityLead > 0 ? (totalLead / qualityLead).toFixed(1) : '-';
     const qlToWalkRatio = walk > 0 ? (qualityLead / walk).toFixed(1) : '-';
     const walkToBookRatio = book > 0 ? (walk / book).toFixed(1) : '-';
@@ -185,17 +170,17 @@ export function ProjectDetailPage() {
       'Book': book,
       'Lead to QL %': leadToQLPct,
       'QL to Walk %': qlToWalkPct,
-      'Walk to Book %': walkToBookPct,
+      'Walk to Book %': walkToBookPctVal,
       'Lead to QL Ratio': leadToQLRatio,
       'QL to Walk Ratio': qlToWalkRatio,
       'Walk to Book Ratio': walkToBookRatio,
     };
   });
 
-  // Split team by role
-  const vpTeam = team.filter(t => t.roleType === 'VP');
-  const mgrTeam = team.filter(t => t.roleType === 'MGR');
-  const mktTeam = team.filter(t => t.roleType === 'MKT');
+  // Split team by department and role
+  const vpTeam = team.filter(t => t.department === 'Sale' && t.roleType === 'VP');
+  const mgrTeam = team.filter(t => t.department === 'Sale' && t.roleType === 'MGR');
+  const mktTeam = team.filter(t => t.department === 'Mkt' && t.roleType === 'MGR');
 
   return (
     <div className="min-h-screen">
@@ -277,7 +262,11 @@ export function ProjectDetailPage() {
                     backgroundColor: '#fff',
                     border: '1px solid #e2e8f0',
                     borderRadius: '8px',
+                    fontSize: '11px',
+                    padding: '8px 12px',
                   }}
+                  labelStyle={{ fontSize: '11px', fontWeight: 600, marginBottom: '4px' }}
+                  itemStyle={{ fontSize: '11px', padding: '2px 0' }}
                 />
                 <Legend />
                 <Bar dataKey="Presale Target" fill="#d1d5db" radius={[4, 4, 0, 0]}>
@@ -401,7 +390,7 @@ export function ProjectDetailPage() {
               <p className="text-sm text-slate-500">Total Lead → Quality Lead → Walk → Book</p>
             </div>
             <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={leadFunnelData} margin={{ top: 25, right: 5, left: 5, bottom: 5 }}>
+              <BarChart data={leadFunnelData} margin={{ top: 35, right: 5, left: 5, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="quarter" stroke="#64748b" fontSize={12} />
                 <YAxis stroke="#64748b" fontSize={12} />
@@ -573,8 +562,8 @@ export function ProjectDetailPage() {
                 </div>
               </div>
 
-              {/* CPL/CPQL */}
-              <div className="grid grid-cols-2 gap-3">
+              {/* CPL/CPQL/CPB */}
+              <div className="grid grid-cols-3 gap-3">
                 <div className="p-4 bg-purple-50 rounded-lg text-center">
                   <div className="text-2xl font-bold text-purple-700">฿{avgCPL.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
                   <div className="text-sm text-purple-600">CPL (Cost per Lead)</div>
@@ -582,6 +571,10 @@ export function ProjectDetailPage() {
                 <div className="p-4 bg-orange-50 rounded-lg text-center">
                   <div className="text-2xl font-bold text-orange-700">฿{avgCPQL.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
                   <div className="text-sm text-orange-600">CPQL (Cost per Q.Lead)</div>
+                </div>
+                <div className="p-4 bg-blue-50 rounded-lg text-center">
+                  <div className="text-2xl font-bold text-blue-700">฿{avgCPB.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
+                  <div className="text-sm text-blue-600">CPB (Cost per Book)</div>
                 </div>
               </div>
 
@@ -616,78 +609,239 @@ export function ProjectDetailPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200">
-                  <th className="text-center py-3 px-4 font-semibold text-slate-600">Quarter</th>
-                  <th className="text-right py-3 px-4 font-semibold text-slate-600">Booking</th>
-                  <th className="text-right py-3 px-4 font-semibold text-emerald-500">Presale Target</th>
-                  <th className="text-right py-3 px-4 font-semibold text-emerald-700">Presale Actual</th>
-                  <th className="text-right py-3 px-4 font-semibold text-slate-600">Achieve %</th>
-                  <th className="text-right py-3 px-4 font-semibold text-blue-500">Revenue Target</th>
-                  <th className="text-right py-3 px-4 font-semibold text-blue-700">Revenue Actual</th>
-                  <th className="text-right py-3 px-4 font-semibold text-slate-600">Achieve %</th>
-                  <th className="text-right py-3 px-4 font-semibold text-slate-600">MKT Expense</th>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  <th className="text-center py-2 px-3 font-semibold text-slate-600 w-20">Quarter</th>
+                  <th className="text-left py-2 px-3 font-semibold text-slate-600 min-w-[160px]">Booking</th>
+                  <th className="text-left py-2 px-3 font-semibold text-slate-600 min-w-[160px]">Contract</th>
+                  <th className="text-left py-2 px-3 font-semibold text-slate-600 min-w-[160px]">Revenue</th>
+                  <th className="text-right py-2 px-3 font-semibold text-orange-600">MKT Expense</th>
                 </tr>
               </thead>
               <tbody>
-                {data.map((row, idx) => (
-                  <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="py-3 px-4 text-center">
-                      <span className="px-3 py-1 bg-slate-100 rounded-lg text-sm font-medium">{row.quarter}</span>
-                    </td>
-                    <td className="py-3 px-4 text-right font-mono">{formatCurrency(row.booking_actual)}</td>
-                    <td className="py-3 px-4 text-right font-mono text-emerald-500">{formatCurrency(row.presale_target)}</td>
-                    <td className="py-3 px-4 text-right font-mono font-medium text-emerald-700">{formatCurrency(row.presale_actual)}</td>
-                    <td className="py-3 px-4 text-right">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        row.presale_achieve_pct >= 0.8 ? 'bg-emerald-100 text-emerald-700' :
-                        row.presale_achieve_pct >= 0.6 ? 'bg-amber-100 text-amber-700' :
-                        'bg-red-100 text-red-700'
-                      }`}>
-                        {(row.presale_achieve_pct * 100).toFixed(1)}%
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-right font-mono text-blue-500">{formatCurrency(row.revenue_target)}</td>
-                    <td className="py-3 px-4 text-right font-mono font-medium text-blue-700">{formatCurrency(row.revenue_actual)}</td>
-                    <td className="py-3 px-4 text-right">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        row.revenue_achieve_pct >= 0.8 ? 'bg-emerald-100 text-emerald-700' :
-                        row.revenue_achieve_pct >= 0.6 ? 'bg-amber-100 text-amber-700' :
-                        'bg-red-100 text-red-700'
-                      }`}>
-                        {(row.revenue_achieve_pct * 100).toFixed(1)}%
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-right font-mono text-orange-600">{formatCurrency(row.mkt_expense_actual)}</td>
-                  </tr>
-                ))}
+                {data.map((row, idx) => {
+                  const bookingPct = row.presaleTarget > 0 ? (row.booking / row.presaleTarget) * 100 : 0;
+                  const contractPct = row.presaleTarget > 0 ? (row.contract / row.presaleTarget) * 100 : 0;
+                  const revenuePct = row.revenueTarget > 0 ? (row.revenue / row.revenueTarget) * 100 : 0;
+                  return (
+                    <tr key={idx} className="border-b border-slate-100 hover:bg-slate-50">
+                      <td className="py-2 px-3 text-center">
+                        <span className="px-3 py-1 bg-slate-100 rounded-lg text-sm font-medium">{row.quarter}</span>
+                      </td>
+                      {/* Booking */}
+                      <td className="py-2 px-3">
+                        <div className="space-y-1">
+                          <div className="flex items-baseline justify-between">
+                            <span className="text-sm font-semibold text-purple-700">{formatCurrency(row.booking)}</span>
+                            <span className={`text-xs font-semibold ${
+                              bookingPct >= 40 ? 'text-purple-600' :
+                              bookingPct >= 20 ? 'text-yellow-600' :
+                              'text-red-500'
+                            }`}>
+                              {bookingPct.toFixed(0)}%
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 relative h-2 bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className={`absolute h-full rounded-full ${
+                                  bookingPct >= 40 ? 'bg-purple-500' :
+                                  bookingPct >= 20 ? 'bg-yellow-500' :
+                                  'bg-red-500'
+                                }`}
+                                style={{ width: `${Math.min(bookingPct, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono">
+                            Target: {formatCurrency(row.presaleTarget)}
+                          </div>
+                        </div>
+                      </td>
+                      {/* Contract */}
+                      <td className="py-2 px-3">
+                        <div className="space-y-1">
+                          <div className="flex items-baseline justify-between">
+                            <span className="text-sm font-semibold text-emerald-700">{formatCurrency(row.contract)}</span>
+                            <span className={`text-xs font-semibold ${
+                              contractPct >= 40 ? 'text-emerald-600' :
+                              contractPct >= 20 ? 'text-yellow-600' :
+                              'text-red-500'
+                            }`}>
+                              {contractPct.toFixed(0)}%
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 relative h-2 bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className={`absolute h-full rounded-full ${
+                                  contractPct >= 40 ? 'bg-emerald-500' :
+                                  contractPct >= 20 ? 'bg-yellow-500' :
+                                  'bg-red-500'
+                                }`}
+                                style={{ width: `${Math.min(contractPct, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono">
+                            Target: {formatCurrency(row.presaleTarget)}
+                          </div>
+                        </div>
+                      </td>
+                      {/* Revenue */}
+                      <td className="py-2 px-3">
+                        <div className="space-y-1">
+                          <div className="flex items-baseline justify-between">
+                            <span className="text-sm font-semibold text-blue-700">{formatCurrency(row.revenue)}</span>
+                            <span className={`text-xs font-semibold ${
+                              revenuePct >= 80 ? 'text-blue-600' :
+                              revenuePct >= 50 ? 'text-yellow-600' :
+                              'text-red-500'
+                            }`}>
+                              {revenuePct.toFixed(0)}%
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 relative h-2 bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className={`absolute h-full rounded-full ${
+                                  revenuePct >= 80 ? 'bg-blue-500' :
+                                  revenuePct >= 50 ? 'bg-yellow-500' :
+                                  'bg-red-500'
+                                }`}
+                                style={{ width: `${Math.min(revenuePct, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono">
+                            Target: {formatCurrency(row.revenueTarget)}
+                          </div>
+                        </div>
+                      </td>
+                      {/* MKT Expense */}
+                      <td className="py-2 px-3">
+                        <div className="space-y-1">
+                          <div className="flex items-baseline justify-end">
+                            <span className="text-sm font-semibold text-orange-700">{formatCurrency(row.mktExpense)}</span>
+                          </div>
+                          <div className="h-2" />
+                          <div className="h-[10px]" />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
                 {/* Total Row */}
-                <tr className="bg-slate-50 font-semibold">
-                  <td className="py-3 px-4 text-center">Total</td>
-                  <td className="py-3 px-4 text-right font-mono">{formatCurrency(totalBooking)}</td>
-                  <td className="py-3 px-4 text-right font-mono text-emerald-500">{formatCurrency(totalPresaleTarget)}</td>
-                  <td className="py-3 px-4 text-right font-mono text-emerald-700">{formatCurrency(totalPresaleActual)}</td>
-                  <td className="py-3 px-4 text-right">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${
-                      presaleAchieve >= 80 ? 'bg-emerald-100 text-emerald-700' :
-                      presaleAchieve >= 50 ? 'bg-yellow-100 text-yellow-700' :
-                      'bg-red-100 text-red-700'
-                    }`}>
-                      {presaleAchieve.toFixed(1)}%
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-right font-mono text-blue-500">{formatCurrency(totalRevenueTarget)}</td>
-                  <td className="py-3 px-4 text-right font-mono text-blue-700">{formatCurrency(totalRevenueActual)}</td>
-                  <td className="py-3 px-4 text-right">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${
-                      revenueAchieve >= 80 ? 'bg-emerald-100 text-emerald-700' :
-                      revenueAchieve >= 50 ? 'bg-yellow-100 text-yellow-700' :
-                      'bg-red-100 text-red-700'
-                    }`}>
-                      {revenueAchieve.toFixed(1)}%
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-right font-mono text-orange-600">{formatCurrency(totalMktExpense)}</td>
-                </tr>
+                {(() => {
+                  const totalContract = data.reduce((sum, r) => sum + Number(r.contract || 0), 0);
+                  const totalBookingPct = totalPresaleTarget > 0 ? (totalBooking / totalPresaleTarget) * 100 : 0;
+                  const totalContractPct = totalPresaleTarget > 0 ? (totalContract / totalPresaleTarget) * 100 : 0;
+                  const totalRevenuePct = totalRevenueTarget > 0 ? (totalRevenueActual / totalRevenueTarget) * 100 : 0;
+                  return (
+                    <tr className="bg-slate-50 font-semibold border-t-2 border-slate-200">
+                      <td className="py-2 px-3 text-center">Total</td>
+                      {/* Booking Total */}
+                      <td className="py-2 px-3">
+                        <div className="space-y-1">
+                          <div className="flex items-baseline justify-between">
+                            <span className="text-sm font-semibold text-purple-700">{formatCurrency(totalBooking)}</span>
+                            <span className={`text-xs font-semibold ${
+                              totalBookingPct >= 40 ? 'text-purple-600' :
+                              totalBookingPct >= 20 ? 'text-yellow-600' :
+                              'text-red-500'
+                            }`}>
+                              {totalBookingPct.toFixed(0)}%
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 relative h-2 bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className={`absolute h-full rounded-full ${
+                                  totalBookingPct >= 40 ? 'bg-purple-500' :
+                                  totalBookingPct >= 20 ? 'bg-yellow-500' :
+                                  'bg-red-500'
+                                }`}
+                                style={{ width: `${Math.min(totalBookingPct, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono">
+                            Target: {formatCurrency(totalPresaleTarget)}
+                          </div>
+                        </div>
+                      </td>
+                      {/* Contract Total */}
+                      <td className="py-2 px-3">
+                        <div className="space-y-1">
+                          <div className="flex items-baseline justify-between">
+                            <span className="text-sm font-semibold text-emerald-700">{formatCurrency(totalContract)}</span>
+                            <span className={`text-xs font-semibold ${
+                              totalContractPct >= 40 ? 'text-emerald-600' :
+                              totalContractPct >= 20 ? 'text-yellow-600' :
+                              'text-red-500'
+                            }`}>
+                              {totalContractPct.toFixed(0)}%
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 relative h-2 bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className={`absolute h-full rounded-full ${
+                                  totalContractPct >= 40 ? 'bg-emerald-500' :
+                                  totalContractPct >= 20 ? 'bg-yellow-500' :
+                                  'bg-red-500'
+                                }`}
+                                style={{ width: `${Math.min(totalContractPct, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono">
+                            Target: {formatCurrency(totalPresaleTarget)}
+                          </div>
+                        </div>
+                      </td>
+                      {/* Revenue Total */}
+                      <td className="py-2 px-3">
+                        <div className="space-y-1">
+                          <div className="flex items-baseline justify-between">
+                            <span className="text-sm font-semibold text-blue-700">{formatCurrency(totalRevenueActual)}</span>
+                            <span className={`text-xs font-semibold ${
+                              totalRevenuePct >= 80 ? 'text-blue-600' :
+                              totalRevenuePct >= 50 ? 'text-yellow-600' :
+                              'text-red-500'
+                            }`}>
+                              {totalRevenuePct.toFixed(0)}%
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 relative h-2 bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className={`absolute h-full rounded-full ${
+                                  totalRevenuePct >= 80 ? 'bg-blue-500' :
+                                  totalRevenuePct >= 50 ? 'bg-yellow-500' :
+                                  'bg-red-500'
+                                }`}
+                                style={{ width: `${Math.min(totalRevenuePct, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono">
+                            Target: {formatCurrency(totalRevenueTarget)}
+                          </div>
+                        </div>
+                      </td>
+                      {/* MKT Total */}
+                      <td className="py-2 px-3">
+                        <div className="space-y-1">
+                          <div className="flex items-baseline justify-end">
+                            <span className="text-sm font-semibold text-orange-700">{formatCurrency(totalMktExpense)}</span>
+                          </div>
+                          <div className="h-2" />
+                          <div className="h-[10px]" />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })()}
               </tbody>
             </table>
           </div>
