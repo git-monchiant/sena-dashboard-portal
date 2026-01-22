@@ -26,6 +26,8 @@ import {
   MarketingPerformancePage,
   VPDetailPage,
   PersonDetailPage,
+  ExcelImportPage,
+  MenuSettingsPage,
 } from '@/reports';
 
 function App() {
@@ -75,6 +77,10 @@ function App() {
             <Route path="maintenance/contractor" element={<ContractorPage />} />
             <Route path="maintenance/exception" element={<MaintenanceExceptionPage />} />
             <Route path="maintenance/settings" element={<MaintenanceSettingsPage />} />
+
+            {/* Data Tools Module */}
+            <Route path="data-tools/excel-import" element={<ExcelImportPage />} />
+            <Route path="data-tools/menu-settings" element={<MenuSettingsPage />} />
           </Route>
         </Routes>
       </Router>

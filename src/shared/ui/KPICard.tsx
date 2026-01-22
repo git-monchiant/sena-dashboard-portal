@@ -29,6 +29,26 @@ const colorClasses: Record<ColorVariant, string> = {
   slate: 'bg-slate-100 text-slate-600',
 };
 
+const badgeColorClasses: Record<ColorVariant, string> = {
+  emerald: 'bg-emerald-50 text-emerald-600',
+  blue: 'bg-blue-50 text-blue-600',
+  purple: 'bg-purple-50 text-purple-600',
+  orange: 'bg-orange-50 text-orange-600',
+  amber: 'bg-amber-50 text-amber-600',
+  red: 'bg-red-50 text-red-600',
+  slate: 'bg-slate-100 text-slate-500',
+};
+
+const valueColorClasses: Record<ColorVariant, string> = {
+  emerald: 'text-emerald-600',
+  blue: 'text-blue-600',
+  purple: 'text-purple-600',
+  orange: 'text-orange-600',
+  amber: 'text-amber-600',
+  red: 'text-red-600',
+  slate: 'text-slate-800',
+};
+
 export function KPICard({
   title,
   value,
@@ -56,34 +76,38 @@ export function KPICard({
 
   return (
     <div
-      className={`card ${isClickable ? 'cursor-pointer hover:shadow-md hover:border-primary-200 transition-all' : ''}`}
+      className={`card text-left ${isClickable ? 'cursor-pointer hover:shadow-md hover:border-primary-200 transition-all' : ''}`}
       onClick={isClickable ? handleClick : undefined}
     >
-      <div className="flex items-start justify-between mb-4">
-        <div className={`w-12 h-12 ${colorClasses[color]} rounded-xl flex items-center justify-center`}>
-          <Icon className="w-6 h-6" />
+      {/* Row 1: Icon + % badge */}
+      <div className="flex items-start justify-between mb-2">
+        <div className={`w-8 h-8 ${colorClasses[color]} rounded-lg flex items-center justify-center`}>
+          <Icon className="w-4 h-4" />
         </div>
         {change && (
-          <div
-            className={`flex items-center gap-1 text-sm font-medium ${
-              changeType === 'neutral' ? 'text-slate-500' :
-              changeType === 'warning' ? 'text-amber-600' :
-              isPositive ? 'text-emerald-600' : 'text-red-500'
-            }`}
-          >
+          <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${badgeColorClasses[color]}`}>
             {showArrow && changeType !== 'neutral' && (
               isPositive ? (
-                <TrendingUp className="w-4 h-4" />
+                <TrendingUp className="w-3 h-3" />
               ) : (
-                <TrendingDown className="w-4 h-4" />
+                <TrendingDown className="w-3 h-3" />
               )
             )}
             {change}
-          </div>
+          </span>
         )}
       </div>
-      <p className="text-2xl font-bold text-slate-800">{value}</p>
-      <p className="text-sm text-slate-500 mt-1">{title}</p>
+
+      {/* Row 2: Value */}
+      <p className={`text-xl font-bold text-left ${valueColorClasses[color]}`}>{value}</p>
+
+      {/* Row 3: Subtext (unit count) */}
+      {subtext && <p className={`text-xs mb-1 text-left ${color === 'slate' ? 'text-slate-400' : `text-${color}-500`}`}>{subtext}</p>}
+
+      {/* Row 4: Title */}
+      <p className="text-xs text-slate-500 font-medium text-left">{title}</p>
+
+      {/* Optional: Progress bar */}
       {target && (
         <div className="flex items-center gap-2 mt-2">
           <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
@@ -95,7 +119,6 @@ export function KPICard({
           <span className="text-xs text-slate-500">{target.percentage.toFixed(2)}%</span>
         </div>
       )}
-      {subtext && <p className="text-xs text-slate-400 mt-1">{subtext}</p>}
     </div>
   );
 }

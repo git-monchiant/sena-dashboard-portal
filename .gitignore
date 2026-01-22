@@ -40,3 +40,7 @@ coverage/
 
 # Misc
 *.local
+
+# Server uploads (temp files)
+server/uploads/
+csv/

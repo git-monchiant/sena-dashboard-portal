@@ -1,0 +1,1 @@
+export { MenuSettingsPage } from './page';

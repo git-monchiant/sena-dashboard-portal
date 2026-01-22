@@ -26,3 +26,4 @@ export {
   VPDetailPage,
   PersonDetailPage,
 } from './sales-2025';
+export { ExcelImportPage, MenuSettingsPage } from './data-tools';

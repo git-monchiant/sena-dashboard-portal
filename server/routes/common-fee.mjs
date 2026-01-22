@@ -235,15 +235,11 @@ router.get('/overview', asyncHandler(async (req, res) => {
         GROUP BY EXTRACT(MONTH FROM paid_date)
       `, paidParams);
 
-      // Query 3: Outstanding by due_date (only invoices past due date)
-      // Build whereClause for outstanding - use due_date year filter
-      const outstandingConditions = ['due_date < CURRENT_DATE', 'status IN (\'active\', \'overdue\', \'partial_payment\')'];
+      // Query 3: Outstanding - ยอดค้างชำระ group by month,year
+      // เอายอดค้างแต่ละเดือน+ปี แล้วคำนวณ running sum
+      const outstandingConditions = ['status = \'overdue\'', 'due_date IS NOT NULL'];
       const outstandingParams = [];
       let outstandingParamIndex = 1;
-
-      outstandingConditions.push(`EXTRACT(YEAR FROM due_date) = $${outstandingParamIndex}`);
-      outstandingParams.push(targetYear);
-      outstandingParamIndex++;
 
       if (site_id) {
         outstandingConditions.push(`site_id = $${outstandingParamIndex}`);
@@ -257,20 +253,51 @@ router.get('/overview', asyncHandler(async (req, res) => {
       }
 
       const outstandingWhereClause = `WHERE ${outstandingConditions.join(' AND ')}`;
-
       const outstandingResult = await silvermanPool.query(`
         SELECT
-          EXTRACT(MONTH FROM due_date) as month_num,
+          EXTRACT(MONTH FROM due_date)::int as month_num,
+          EXTRACT(YEAR FROM due_date)::int as year_num,
           COALESCE(SUM(total), 0) as outstanding_raw
         FROM silverman.invoice
         ${outstandingWhereClause}
-        GROUP BY EXTRACT(MONTH FROM due_date)
+        GROUP BY EXTRACT(MONTH FROM due_date), EXTRACT(YEAR FROM due_date)
+        ORDER BY year_num, month_num
       `, outstandingParams);
+
+      // สร้าง running sum ของยอดค้าง เรียงตาม year,month
+      const outstandingData = outstandingResult.rows;
+      const cumulativeByYearMonth = new Map();
+      let runningSum = 0;
+
+      for (const row of outstandingData) {
+        runningSum += parseFloat(row.outstanding_raw || 0);
+        const key = `${row.year_num}-${String(row.month_num).padStart(2, '0')}`;
+        cumulativeByYearMonth.set(key, runningSum);
+      }
+
+      // หา cumulative outstanding สำหรับแต่ละเดือนของปีที่เลือก
+      const outstandingByMonth = [];
+      for (let monthNum = 1; monthNum <= 12; monthNum++) {
+        const targetKey = `${targetYear}-${String(monthNum).padStart(2, '0')}`;
+
+        // หาค่าสะสมที่ <= targetKey
+        let cumValue = 0;
+        for (const [key, value] of cumulativeByYearMonth.entries()) {
+          if (key <= targetKey) {
+            cumValue = value;
+          }
+        }
+
+        outstandingByMonth.push({
+          month_num: monthNum,
+          outstanding_raw: cumValue
+        });
+      }
 
       // Create maps for each metric
       const billedMap = new Map(billedResult.rows.map(r => [parseInt(r.month_num), parseFloat(r.billed_raw)]));
       const paidMap = new Map(paidResult.rows.map(r => [parseInt(r.month_num), parseFloat(r.paid_raw)]));
-      const outstandingMap = new Map(outstandingResult.rows.map(r => [parseInt(r.month_num), parseFloat(r.outstanding_raw)]));
+      const outstandingMap = new Map(outstandingByMonth.map(r => [r.month_num, r.outstanding_raw]));
 
       // Always use raw baht values (no scaling)
       const unit = 'บาท';
@@ -360,14 +387,14 @@ router.get('/overview', asyncHandler(async (req, res) => {
     trend: (() => {
       // monthlyTrend returns { data, selectedYear }
       const trendData = monthlyTrend.data || [];
-      let cumBilled = 0, cumPaid = 0, cumOutstanding = 0;
+      let cumBilled = 0, cumPaid = 0;
       return trendData.map(row => {
         const billed = parseFloat(row.billed || 0);
         const paid = parseFloat(row.paid || 0);
+        // outstanding จาก query คือยอดสะสมถึงเดือนนั้นแล้ว (due_date <= สิ้นเดือน)
         const outstanding = parseFloat(row.outstanding || 0);
         cumBilled += billed;
         cumPaid += paid;
-        cumOutstanding += outstanding;
         return {
           month: row.month,
           monthKey: row.month_key,
@@ -376,7 +403,8 @@ router.get('/overview', asyncHandler(async (req, res) => {
           outstanding,
           cumBilled: Math.round(cumBilled * 100) / 100,
           cumPaid: Math.round(cumPaid * 100) / 100,
-          cumOutstanding: Math.round(cumOutstanding * 100) / 100,
+          // outstanding คือยอดสะสมอยู่แล้ว ใช้ค่าตรงๆ
+          cumOutstanding: Math.round(outstanding * 100) / 100,
         };
       });
     })(),
@@ -473,7 +501,21 @@ router.get('/invoices', asyncHandler(async (req, res) => {
 
 // ===== Collection (Detailed Invoice List with Summary) =====
 router.get('/collection', asyncHandler(async (req, res) => {
-  const { site_id, year, status, search, period, pay_group, limit = 50, offset = 0 } = req.query;
+  const { site_id, year, status, search, period, pay_group, limit = 50, offset = 0, sort_by = 'issued_date', sort_order = 'desc' } = req.query;
+
+  // Map sort fields to SQL columns
+  const sortFieldMap = {
+    doc_number: 'i.doc_number',
+    unit: 'i.name',
+    owner: "CONCAT(i.first_name, ' ', i.last_name)",
+    billed_amount: 'i.total',
+    status: 'i.status',
+    due_date: 'i.due_date',
+    issued_date: 'i.issued_date',
+    paid_date: 'i.paid_date',
+  };
+  const sortColumn = sortFieldMap[sort_by] || 'i.issued_date';
+  const sortDirection = sort_order === 'asc' ? 'ASC' : 'DESC';
 
   // Build WHERE conditions
   const conditions = [];
@@ -532,9 +574,9 @@ router.get('/collection', asyncHandler(async (req, res) => {
   const cumulativeParams = [];
   let cumulativeParamIndex = 1;
 
-  // Filter: issued_date year < selected year (สะสม = ค้างจากปีก่อนๆ เท่านั้น ไม่รวมปีที่เลือก)
+  // Filter: due_date year < selected year (สะสม = ค้างจากปีก่อนๆ เท่านั้น ไม่รวมปีที่เลือก)
   if (year) {
-    cumulativeConditions.push(`EXTRACT(YEAR FROM issued_date) < $${cumulativeParamIndex}`);
+    cumulativeConditions.push(`EXTRACT(YEAR FROM due_date) < $${cumulativeParamIndex}`);
     cumulativeParams.push(year);
     cumulativeParamIndex++;
   }
@@ -555,7 +597,8 @@ router.get('/collection', asyncHandler(async (req, res) => {
   const cumulativeOverdueResult = await silvermanPool.query(`
     SELECT
       COALESCE(SUM(total), 0) as cumulative_overdue,
-      COUNT(*) as cumulative_overdue_count
+      COUNT(*) as cumulative_overdue_count,
+      COUNT(DISTINCT name) as cumulative_overdue_unit_count
     FROM silverman.invoice
     ${cumulativeWhereClause}
   `, cumulativeParams);
@@ -566,9 +609,9 @@ router.get('/collection', asyncHandler(async (req, res) => {
   const yearlyOverdueParams = [];
   let yearlyOverdueParamIndex = 1;
 
-  // Filter: issued_date year = selected year (ค้างของปีที่เลือก - ใช้ issued_date ให้ตรงกับ list)
+  // Filter: due_date year = selected year (ค้างของปีที่เลือก - ใช้ due_date)
   if (year) {
-    yearlyOverdueConditions.push(`EXTRACT(YEAR FROM issued_date) = $${yearlyOverdueParamIndex}`);
+    yearlyOverdueConditions.push(`EXTRACT(YEAR FROM due_date) = $${yearlyOverdueParamIndex}`);
     yearlyOverdueParams.push(year);
     yearlyOverdueParamIndex++;
   }
@@ -589,27 +632,70 @@ router.get('/collection', asyncHandler(async (req, res) => {
   const yearlyOverdueResult = await silvermanPool.query(`
     SELECT
       COALESCE(SUM(total), 0) as yearly_overdue,
-      COUNT(*) as yearly_overdue_count
+      COUNT(*) as yearly_overdue_count,
+      COUNT(DISTINCT name) as yearly_overdue_unit_count
     FROM silverman.invoice
     ${yearlyOverdueWhereClause}
   `, yearlyOverdueParams);
 
+  // Query for total distinct overdue units (due_date year <= ปีที่เลือก)
+  const totalOverdueConditions = ['status = \'overdue\''];
+  const totalOverdueParams = [];
+  let totalOverdueParamIndex = 1;
+
+  // Filter: due_date year <= selected year
+  if (year) {
+    totalOverdueConditions.push(`EXTRACT(YEAR FROM due_date) <= $${totalOverdueParamIndex}`);
+    totalOverdueParams.push(year);
+    totalOverdueParamIndex++;
+  }
+
+  if (site_id) {
+    totalOverdueConditions.push(`site_id = $${totalOverdueParamIndex}`);
+    totalOverdueParams.push(site_id);
+    totalOverdueParamIndex++;
+  }
+  if (pay_group) {
+    totalOverdueConditions.push(`pay_group = $${totalOverdueParamIndex}`);
+    totalOverdueParams.push(pay_group);
+    totalOverdueParamIndex++;
+  }
+
+  const totalOverdueWhereClause = `WHERE ${totalOverdueConditions.join(' AND ')}`;
+
+  const totalOverdueResult = await silvermanPool.query(`
+    SELECT
+      COALESCE(SUM(total), 0) as total_overdue,
+      COUNT(*) as total_overdue_count,
+      COUNT(DISTINCT name) as total_overdue_unit_count
+    FROM silverman.invoice
+    ${totalOverdueWhereClause}
+  `, totalOverdueParams);
+
   // Get summary statistics (with same filters) - include both count and amount per status
+  // เพิ่ม unit count (COUNT DISTINCT name) สำหรับทุก status
   const summaryResult = await silvermanPool.query(`
     SELECT
       COUNT(*) as total,
+      COUNT(DISTINCT name) as total_unit_count,
       COALESCE(SUM(total), 0) as total_amount,
       COUNT(*) FILTER (WHERE status = 'paid') as paid_count,
+      COUNT(DISTINCT name) FILTER (WHERE status = 'paid') as paid_unit_count,
       COALESCE(SUM(total) FILTER (WHERE status = 'paid'), 0) as paid_amount,
       COUNT(*) FILTER (WHERE status = 'partial_payment') as partial_count,
+      COUNT(DISTINCT name) FILTER (WHERE status = 'partial_payment') as partial_unit_count,
       COALESCE(SUM(total) FILTER (WHERE status = 'partial_payment'), 0) as partial_amount,
       COUNT(*) FILTER (WHERE status = 'active') as active_count,
+      COUNT(DISTINCT name) FILTER (WHERE status = 'active') as active_unit_count,
       COALESCE(SUM(total) FILTER (WHERE status = 'active'), 0) as active_amount,
       COUNT(*) FILTER (WHERE status = 'overdue') as overdue_count,
+      COUNT(DISTINCT name) FILTER (WHERE status = 'overdue') as overdue_unit_count,
       COALESCE(SUM(total) FILTER (WHERE status = 'overdue'), 0) as overdue_amount,
       COUNT(*) FILTER (WHERE status = 'void') as void_count,
+      COUNT(DISTINCT name) FILTER (WHERE status = 'void') as void_unit_count,
       COALESCE(SUM(total) FILTER (WHERE status = 'void'), 0) as void_amount,
       COUNT(*) FILTER (WHERE status = 'draft') as draft_count,
+      COUNT(DISTINCT name) FILTER (WHERE status = 'draft') as draft_unit_count,
       COALESCE(SUM(total) FILTER (WHERE status = 'draft'), 0) as draft_amount
     FROM silverman.invoice i
     ${whereClause}
@@ -642,47 +728,59 @@ router.get('/collection', asyncHandler(async (req, res) => {
     FROM silverman.invoice i
     LEFT JOIN silverman.site s ON s.id = i.site_id
     ${whereClause}
-    ORDER BY i.issued_date DESC NULLS LAST, i.added DESC NULLS LAST
+    ORDER BY ${sortColumn} ${sortDirection} NULLS LAST, i.added DESC NULLS LAST
     LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
   `, dataParams);
 
   const summary = summaryResult.rows[0];
   const cumulativeOverdue = cumulativeOverdueResult.rows[0];
   const yearlyOverdue = yearlyOverdueResult.rows[0];
+  const totalOverdue = totalOverdueResult.rows[0];
 
   res.json({
     data: dataResult.rows,
     summary: {
       total: parseInt(summary.total || 0),
+      totalUnitCount: parseInt(summary.total_unit_count || 0),
       totalAmount: parseFloat(summary.total_amount || 0),
       paid: {
         count: parseInt(summary.paid_count || 0),
+        unitCount: parseInt(summary.paid_unit_count || 0),
         amount: parseFloat(summary.paid_amount || 0),
       },
       partial: {
         count: parseInt(summary.partial_count || 0),
+        unitCount: parseInt(summary.partial_unit_count || 0),
         amount: parseFloat(summary.partial_amount || 0),
       },
       active: {
         count: parseInt(summary.active_count || 0),
+        unitCount: parseInt(summary.active_unit_count || 0),
         amount: parseFloat(summary.active_amount || 0),
       },
       overdue: {
         // count/amount = invoices with status='overdue' in the filtered year (original logic)
         count: parseInt(summary.overdue_count || 0),
+        unitCount: parseInt(summary.overdue_unit_count || 0),
         // ค้างรายปี = issued this year + past due date + not paid
         amount: parseFloat(yearlyOverdue.yearly_overdue || 0),
         yearlyCount: parseInt(yearlyOverdue.yearly_overdue_count || 0),
+        yearlyUnitCount: parseInt(yearlyOverdue.yearly_overdue_unit_count || 0),
         // สะสม = all past due date regardless of issue year
         cumulativeAmount: parseFloat(cumulativeOverdue.cumulative_overdue || 0),
         cumulativeCount: parseInt(cumulativeOverdue.cumulative_overdue_count || 0),
+        cumulativeUnitCount: parseInt(cumulativeOverdue.cumulative_overdue_unit_count || 0),
+        // Total distinct units (ไม่แยกปี - นับ unit ที่ค้างทั้งหมดไม่ซ้ำ)
+        totalUnitCount: parseInt(totalOverdue.total_overdue_unit_count || 0),
       },
       void: {
         count: parseInt(summary.void_count || 0),
+        unitCount: parseInt(summary.void_unit_count || 0),
         amount: parseFloat(summary.void_amount || 0),
       },
       draft: {
         count: parseInt(summary.draft_count || 0),
+        unitCount: parseInt(summary.draft_unit_count || 0),
         amount: parseFloat(summary.draft_amount || 0),
       },
     },
@@ -1066,6 +1164,310 @@ router.get('/stats/by-site', asyncHandler(async (req, res) => {
   `);
 
   res.json(result.rows);
+}));
+
+// ===== Expense Summary by Type =====
+// Expense type mapping
+const EXPENSE_TYPES = [
+  { id: 'common_fee', name: 'ค่าส่วนกลาง', keywords: ['ส่วนกลาง'], exclude: ['ปรับปรุง'] },
+  { id: 'water', name: 'ค่าน้ำประปา', keywords: ['ค่าน้ำประปา'], exclude: [] },
+  { id: 'water_meter', name: 'ค่ามิเตอร์น้ำ', keywords: ['มิเตอร์น้ำ'], exclude: [] },
+  { id: 'public_service', name: 'ค่าบริการสาธารณะ', keywords: ['บริการสาธารณะ'], exclude: [] },
+  { id: 'insurance', name: 'ค่าเบี้ยประกัน', keywords: ['ประกันภัย'], exclude: [] },
+  { id: 'parking', name: 'ค่าจอดรถ', keywords: ['จอดรถ', 'จอดจักรยานยนต์'], exclude: [] },
+  { id: 'surcharge', name: 'เงินเพิ่ม', keywords: ['เงินเพิ่ม'], exclude: [] },
+  { id: 'interest', name: 'ค่าดอกเบี้ย', keywords: ['ค่าดอกเบี้ย'], exclude: [] },
+  { id: 'fine', name: 'ค่าปรับ/เบี้ยปรับ', keywords: ['ค่าปรับ', 'ค่าเบี้ยปรับ'], exclude: ['ปรับปรุง'] },
+  { id: 'fund', name: 'เงินกองทุน', keywords: ['กองทุน'], exclude: [] },
+  { id: 'electricity', name: 'ค่าไฟฟ้า', keywords: ['ไฟฟ้า', 'กระแสไฟ'], exclude: [] },
+  { id: 'other', name: 'อื่นๆ', keywords: [], exclude: [] },
+];
+
+function categorizeExpense(description) {
+  for (const type of EXPENSE_TYPES) {
+    // Check exclude first
+    if (type.exclude.some(ex => description.includes(ex))) continue;
+    // Check keywords
+    if (type.keywords.length === 0) continue; // Skip 'other' in loop
+    if (type.keywords.some(kw => description.includes(kw))) {
+      return type;
+    }
+  }
+  return EXPENSE_TYPES.find(t => t.id === 'other');
+}
+
+router.get('/expense-summary', asyncHandler(async (req, res) => {
+  const { site_id, year, status } = req.query;
+
+  // Build WHERE clause
+  const conditions = ["transaction IS NOT NULL", "transaction != '{''transaction'': []}'"];
+  const params = [];
+  let paramIndex = 1;
+
+  if (site_id) {
+    conditions.push(`site_id = $${paramIndex}`);
+    params.push(site_id);
+    paramIndex++;
+  }
+  if (year) {
+    conditions.push(`EXTRACT(YEAR FROM issued_date) = $${paramIndex}`);
+    params.push(year);
+    paramIndex++;
+  }
+  if (status) {
+    conditions.push(`status = $${paramIndex}`);
+    params.push(status);
+    paramIndex++;
+  }
+
+  const whereClause = `WHERE ${conditions.join(' AND ')}`;
+
+  // Query invoice_data with transaction JSON
+  const result = await silvermanPool.query(`
+    SELECT transaction, total as invoice_total, status
+    FROM silverman.invoice_data
+    ${whereClause}
+  `, params);
+
+  // Parse and categorize
+  const summary = {};
+  EXPENSE_TYPES.forEach(type => {
+    summary[type.id] = { id: type.id, name: type.name, count: 0, amount: 0 };
+  });
+
+  for (const row of result.rows) {
+    try {
+      // Convert Python-style dict to JSON
+      const jsonStr = row.transaction
+        .replace(/'/g, '"')
+        .replace(/None/g, 'null')
+        .replace(/True/g, 'true')
+        .replace(/False/g, 'false');
+      const data = JSON.parse(jsonStr);
+
+      if (data.transaction && Array.isArray(data.transaction)) {
+        for (const txn of data.transaction) {
+          if (txn.description) {
+            const desc = txn.description.split('(')[0].trim();
+            const type = categorizeExpense(desc);
+            summary[type.id].count++;
+            summary[type.id].amount += parseFloat(txn.total) || 0;
+          }
+        }
+      }
+    } catch (e) {
+      // Skip invalid JSON
+    }
+  }
+
+  // Convert to array and sort by amount desc
+  const summaryArray = Object.values(summary)
+    .filter(item => item.count > 0)
+    .sort((a, b) => b.amount - a.amount);
+
+  res.json({
+    data: summaryArray,
+    totalInvoices: result.rows.length,
+    filters: { site_id, year, status },
+  });
+}));
+
+// ===== Aging Report - Invoice Level =====
+router.get('/aging', asyncHandler(async (req, res) => {
+  const { site_id, year, bucket, search, limit = 50, offset = 0, sort_by = 'daysOverdue', sort_order = 'desc' } = req.query;
+
+  // Map sort fields to SQL columns
+  const sortFieldMap = {
+    docNumber: 'i.doc_number',
+    unit: 'i.name',
+    owner: "CONCAT(i.first_name, ' ', i.last_name)",
+    project: "COALESCE(p.name_en, INITCAP(REPLACE(SPLIT_PART(s.name, '.', 1), '-', ' ')))",
+    amount: 'i.total',
+    dueDate: 'i.due_date',
+    daysOverdue: '(CURRENT_DATE - i.due_date)',
+  };
+  const sortColumn = sortFieldMap[sort_by] || '(CURRENT_DATE - i.due_date)';
+  const sortDirection = sort_order === 'asc' ? 'ASC' : 'DESC';
+
+  // Build WHERE clause for overdue invoices
+  const conditions = [
+    "status IN ('overdue', 'active')",
+    "due_date < CURRENT_DATE"
+  ];
+  const params = [];
+  let paramIndex = 1;
+
+  if (site_id) {
+    conditions.push(`i.site_id = $${paramIndex}`);
+    params.push(site_id);
+    paramIndex++;
+  }
+  if (year) {
+    conditions.push(`EXTRACT(YEAR FROM i.due_date) = $${paramIndex}`);
+    params.push(year);
+    paramIndex++;
+  }
+  if (search) {
+    conditions.push(`(i.name ILIKE $${paramIndex} OR i.first_name ILIKE $${paramIndex} OR i.last_name ILIKE $${paramIndex} OR i.doc_number ILIKE $${paramIndex})`);
+    params.push(`%${search}%`);
+    paramIndex++;
+  }
+
+  const whereClause = `WHERE ${conditions.join(' AND ')}`;
+
+  // Get summary (all buckets) - always show TOTAL overdue (no year filter)
+  // This matches Overview page which shows total overdue (yearly + cumulative)
+  const summaryParams = [];
+  let summaryParamIndex = 1;
+  const summaryConditions = [
+    "status IN ('overdue', 'active')",
+    "due_date < CURRENT_DATE"
+  ];
+  if (site_id) {
+    summaryConditions.push(`site_id = $${summaryParamIndex}`);
+    summaryParams.push(site_id);
+    summaryParamIndex++;
+  }
+  // Note: don't include year filter in summary - we want TOTAL overdue
+  // Note: don't include search in summary - we want overall totals
+
+  const summaryWhereClause = `WHERE ${summaryConditions.join(' AND ')}`;
+  const summaryQuery = await silvermanPool.query(`
+    SELECT
+      COUNT(DISTINCT name) as total_count,
+      COALESCE(SUM(total), 0) as total_amount,
+      COUNT(DISTINCT name) FILTER (WHERE (CURRENT_DATE - due_date) BETWEEN 0 AND 30) as bucket_0_30_count,
+      COALESCE(SUM(total) FILTER (WHERE (CURRENT_DATE - due_date) BETWEEN 0 AND 30), 0) as bucket_0_30_amount,
+      COUNT(DISTINCT name) FILTER (WHERE (CURRENT_DATE - due_date) BETWEEN 31 AND 60) as bucket_31_60_count,
+      COALESCE(SUM(total) FILTER (WHERE (CURRENT_DATE - due_date) BETWEEN 31 AND 60), 0) as bucket_31_60_amount,
+      COUNT(DISTINCT name) FILTER (WHERE (CURRENT_DATE - due_date) BETWEEN 61 AND 90) as bucket_61_90_count,
+      COALESCE(SUM(total) FILTER (WHERE (CURRENT_DATE - due_date) BETWEEN 61 AND 90), 0) as bucket_61_90_amount,
+      COUNT(DISTINCT name) FILTER (WHERE (CURRENT_DATE - due_date) BETWEEN 91 AND 180) as bucket_91_180_count,
+      COALESCE(SUM(total) FILTER (WHERE (CURRENT_DATE - due_date) BETWEEN 91 AND 180), 0) as bucket_91_180_amount,
+      COUNT(DISTINCT name) FILTER (WHERE (CURRENT_DATE - due_date) BETWEEN 181 AND 360) as bucket_181_360_count,
+      COALESCE(SUM(total) FILTER (WHERE (CURRENT_DATE - due_date) BETWEEN 181 AND 360), 0) as bucket_181_360_amount,
+      COUNT(DISTINCT name) FILTER (WHERE (CURRENT_DATE - due_date) > 360) as bucket_360_plus_count,
+      COALESCE(SUM(total) FILTER (WHERE (CURRENT_DATE - due_date) > 360), 0) as bucket_360_plus_amount
+    FROM silverman.invoice
+    ${summaryWhereClause}
+  `, summaryParams);
+
+  const summary = summaryQuery.rows[0];
+
+  // Get invoices with pagination
+  // Build condition for bucket filter if specified
+  let invoiceBucketCondition = '';
+  if (bucket) {
+    switch (bucket) {
+      case '0-30':
+        invoiceBucketCondition = `AND (CURRENT_DATE - i.due_date) BETWEEN 0 AND 30`;
+        break;
+      case '31-60':
+        invoiceBucketCondition = `AND (CURRENT_DATE - i.due_date) BETWEEN 31 AND 60`;
+        break;
+      case '61-90':
+        invoiceBucketCondition = `AND (CURRENT_DATE - i.due_date) BETWEEN 61 AND 90`;
+        break;
+      case '91-180':
+        invoiceBucketCondition = `AND (CURRENT_DATE - i.due_date) BETWEEN 91 AND 180`;
+        break;
+      case '181-360':
+        invoiceBucketCondition = `AND (CURRENT_DATE - i.due_date) BETWEEN 181 AND 360`;
+        break;
+      case '360+':
+        invoiceBucketCondition = `AND (CURRENT_DATE - i.due_date) > 360`;
+        break;
+    }
+  }
+
+  const invoicesQuery = await silvermanPool.query(`
+    SELECT
+      i.id,
+      i.doc_number,
+      i.name as unit,
+      CONCAT(i.first_name, ' ', i.last_name) as owner,
+      s.name as site_domain,
+      COALESCE(p.name_en, INITCAP(REPLACE(SPLIT_PART(s.name, '.', 1), '-', ' '))) as project,
+      i.site_id,
+      i.total as amount,
+      i.due_date,
+      (CURRENT_DATE - i.due_date) as days_overdue,
+      CASE
+        WHEN (CURRENT_DATE - i.due_date) BETWEEN 0 AND 30 THEN '0-30'
+        WHEN (CURRENT_DATE - i.due_date) BETWEEN 31 AND 60 THEN '31-60'
+        WHEN (CURRENT_DATE - i.due_date) BETWEEN 61 AND 90 THEN '61-90'
+        WHEN (CURRENT_DATE - i.due_date) BETWEEN 91 AND 180 THEN '91-180'
+        WHEN (CURRENT_DATE - i.due_date) BETWEEN 181 AND 360 THEN '181-360'
+        ELSE '360+'
+      END as bucket
+    FROM silverman.invoice i
+    LEFT JOIN silverman.site s ON s.id = i.site_id
+    LEFT JOIN silverman.project p ON p.site_id = s.id
+    ${whereClause}
+    ${invoiceBucketCondition}
+    ORDER BY ${sortColumn} ${sortDirection}, i.total DESC
+    LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+  `, [...params, parseInt(limit), parseInt(offset)]);
+
+  // Get total count for pagination (with all filters including bucket)
+  const countQuery = await silvermanPool.query(`
+    SELECT COUNT(*) as count
+    FROM silverman.invoice i
+    ${whereClause}
+    ${invoiceBucketCondition}
+  `, params);
+
+  res.json({
+    summary: {
+      total: {
+        count: parseInt(summary.total_count) || 0,
+        amount: parseFloat(summary.total_amount) || 0,
+      },
+      buckets: {
+        '0-30': {
+          count: parseInt(summary.bucket_0_30_count) || 0,
+          amount: parseFloat(summary.bucket_0_30_amount) || 0,
+        },
+        '31-60': {
+          count: parseInt(summary.bucket_31_60_count) || 0,
+          amount: parseFloat(summary.bucket_31_60_amount) || 0,
+        },
+        '61-90': {
+          count: parseInt(summary.bucket_61_90_count) || 0,
+          amount: parseFloat(summary.bucket_61_90_amount) || 0,
+        },
+        '91-180': {
+          count: parseInt(summary.bucket_91_180_count) || 0,
+          amount: parseFloat(summary.bucket_91_180_amount) || 0,
+        },
+        '181-360': {
+          count: parseInt(summary.bucket_181_360_count) || 0,
+          amount: parseFloat(summary.bucket_181_360_amount) || 0,
+        },
+        '360+': {
+          count: parseInt(summary.bucket_360_plus_count) || 0,
+          amount: parseFloat(summary.bucket_360_plus_amount) || 0,
+        },
+      },
+    },
+    invoices: invoicesQuery.rows.map(row => ({
+      id: row.id,
+      docNumber: row.doc_number,
+      unit: row.unit,
+      owner: row.owner,
+      project: row.project,
+      siteId: row.site_id,
+      amount: parseFloat(row.amount) || 0,
+      dueDate: row.due_date,
+      daysOverdue: parseInt(row.days_overdue) || 0,
+      bucket: row.bucket,
+    })),
+    pagination: {
+      total: parseInt(countQuery.rows[0].count) || 0,
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+    },
+  });
 }));
 
 export default router;

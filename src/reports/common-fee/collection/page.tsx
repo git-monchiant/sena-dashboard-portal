@@ -62,19 +62,25 @@ interface InvoiceItemsResponse {
 
 interface StatusSummary {
   count: number;
+  unitCount?: number;  // จำนวนบ้านเลขที่
   amount: number;
 }
 
 interface OverdueSummary extends StatusSummary {
+  unitCount?: number;          // จำนวนบ้านเลขที่ค้างในปีที่กรอง
   yearlyCount?: number;        // จำนวนรายการค้างรายปี (issued ปีนี้ + เลย due)
+  yearlyUnitCount?: number;    // จำนวนบ้านเลขที่ค้างรายปี
   cumulativeAmount?: number;   // ยอดสะสมทั้งหมดที่เลย due
   cumulativeCount?: number;    // จำนวนรายการสะสมทั้งหมด
+  cumulativeUnitCount?: number; // จำนวนบ้านเลขที่สะสมทั้งหมด
+  totalUnitCount?: number;     // จำนวนบ้านเลขที่ค้างทั้งหมด (distinct ไม่ซ้ำ)
 }
 
 interface ApiResponse {
   data: InvoiceRecord[];
   summary: {
     total: number;
+    totalUnitCount: number;
     totalAmount: number;
     paid: StatusSummary;
     partial: StatusSummary;
@@ -103,13 +109,14 @@ const statusConfig: Record<string, { label: string; icon: typeof CheckCircle; cl
 
 const defaultSummary: ApiResponse['summary'] = {
   total: 0,
+  totalUnitCount: 0,
   totalAmount: 0,
-  paid: { count: 0, amount: 0 },
-  partial: { count: 0, amount: 0 },
-  active: { count: 0, amount: 0 },
-  overdue: { count: 0, amount: 0, yearlyCount: 0, cumulativeAmount: 0, cumulativeCount: 0 },
-  void: { count: 0, amount: 0 },
-  draft: { count: 0, amount: 0 },
+  paid: { count: 0, unitCount: 0, amount: 0 },
+  partial: { count: 0, unitCount: 0, amount: 0 },
+  active: { count: 0, unitCount: 0, amount: 0 },
+  overdue: { count: 0, unitCount: 0, amount: 0, yearlyCount: 0, yearlyUnitCount: 0, cumulativeAmount: 0, cumulativeCount: 0, cumulativeUnitCount: 0 },
+  void: { count: 0, unitCount: 0, amount: 0 },
+  draft: { count: 0, unitCount: 0, amount: 0 },
 };
 
 const defaultPagination = {
@@ -132,6 +139,22 @@ export function CollectionDetailPage() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+
+  // Sort and display mode state
+  const [showAll, setShowAll] = useState(false);
+  const [sortBy, setSortBy] = useState<'doc_number' | 'unit' | 'owner' | 'billed_amount' | 'status' | 'due_date' | 'issued_date' | 'paid_date'>('billed_amount');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  const sortLabels: Record<string, string> = {
+    billed_amount: 'ยอดเรียกเก็บ',
+    issued_date: 'วันที่ออกบิล',
+    due_date: 'กำหนดชำระ',
+    paid_date: 'วันที่ชำระ',
+    unit: 'ยูนิต',
+    owner: 'เจ้าของ',
+    doc_number: 'เลขที่บิล',
+    status: 'สถานะ',
+  };
 
   // Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -197,8 +220,16 @@ export function CollectionDetailPage() {
       if (statusFilter && statusFilter !== 'all') params.append('status', statusFilter);
       if (payGroupFilter) params.append('pay_group', payGroupFilter);
       if (searchQuery) params.append('search', searchQuery);
-      params.append('limit', String(pageSize));
-      params.append('offset', String((currentPage - 1) * pageSize));
+
+      // Dynamic limit based on showAll mode
+      const effectiveLimit = showAll ? pageSize : 10;
+      const effectiveOffset = showAll ? (currentPage - 1) * pageSize : 0;
+      params.append('limit', String(effectiveLimit));
+      params.append('offset', String(effectiveOffset));
+
+      // Sort parameters
+      params.append('sort_by', sortBy);
+      params.append('sort_order', sortOrder);
 
       const response = await fetch(`/api/common-fee/collection?${params}`);
       if (!response.ok) throw new Error('Failed to fetch data');
@@ -215,7 +246,7 @@ export function CollectionDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [siteFilter, yearFilter, periodFilter, statusFilter, payGroupFilter, searchQuery, pageSize, currentPage]);
+  }, [siteFilter, yearFilter, periodFilter, statusFilter, payGroupFilter, searchQuery, pageSize, currentPage, showAll, sortBy, sortOrder]);
 
   // Fetch when filters change
   useEffect(() => {
@@ -244,6 +275,21 @@ export function CollectionDetailPage() {
 
   const handleExport = () => {
     console.log('Exporting to Excel...');
+  };
+
+  const handleSortByChange = (newSortBy: typeof sortBy) => {
+    setSortBy(newSortBy);
+    setCurrentPage(1);
+  };
+
+  const handleSortOrderChange = (newSortOrder: 'asc' | 'desc') => {
+    setSortOrder(newSortOrder);
+    setCurrentPage(1);
+  };
+
+  const handleShowAllToggle = () => {
+    setShowAll(!showAll);
+    setCurrentPage(1);
   };
 
   // Pagination helpers
@@ -315,121 +361,131 @@ export function CollectionDetailPage() {
           showPayGroup={true}
         />
 
-        {/* Summary Cards - Professional Design (Amount Only) */}
+        {/* Summary Cards - Amount focused, % top-right, unit below amount, left-aligned */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
           {/* ทั้งหมด */}
           <button
             onClick={() => handleStatusClick('all')}
-            className={`card transition-all ${statusFilter === 'all' ? 'ring-2 ring-primary-500 shadow-md' : 'hover:shadow-md hover:border-primary-200'}`}
+            className={`card text-left transition-all ${statusFilter === 'all' ? 'ring-2 ring-primary-500 shadow-md' : 'hover:shadow-md hover:border-primary-200'}`}
           >
             <div className="flex items-start justify-between mb-2">
               <div className="w-8 h-8 bg-slate-100 text-slate-600 rounded-lg flex items-center justify-center">
                 <FileText className="w-4 h-4" />
               </div>
-              <span className="text-xs font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full">
-                {summary.total.toLocaleString()}
-              </span>
+              <span className="text-xs font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full">100%</span>
             </div>
-            <p className="text-xl font-bold text-slate-800 mb-0.5">
+            <p className="text-xl font-bold text-slate-800 text-left">
               ฿{(summary.totalAmount / 1000).toLocaleString('en-US', { maximumFractionDigits: 0 })}K
             </p>
-            <p className="text-xs text-slate-500">ทั้งหมด</p>
+            <p className="text-xs text-slate-400 mb-1 text-left">{(summary.totalUnitCount || 0).toLocaleString()} ยูนิต</p>
+            <p className="text-xs text-slate-500 font-medium text-left">ทั้งหมด</p>
           </button>
 
           {/* ชำระแล้ว */}
           <button
             onClick={() => handleStatusClick('paid')}
-            className={`card transition-all ${statusFilter === 'paid' ? 'ring-2 ring-emerald-500 shadow-md' : 'hover:shadow-md hover:border-emerald-200'}`}
+            className={`card text-left transition-all ${statusFilter === 'paid' ? 'ring-2 ring-emerald-500 shadow-md' : 'hover:shadow-md hover:border-emerald-200'}`}
           >
             <div className="flex items-start justify-between mb-2">
               <div className="w-8 h-8 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center">
                 <CheckCircle className="w-4 h-4" />
               </div>
               <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">
-                {summary.totalAmount > 0 ? `${(((summary.paid?.amount || 0) / summary.totalAmount) * 100).toFixed(0)}%` : '0%'}
+                {summary.totalAmount > 0 ? ((summary.paid?.amount || 0) / summary.totalAmount * 100).toFixed(0) : 0}%
               </span>
             </div>
-            <p className="text-xl font-bold text-emerald-600 mb-0.5">
+            <p className="text-xl font-bold text-emerald-600 text-left">
               ฿{((summary.paid?.amount || 0) / 1000).toLocaleString('en-US', { maximumFractionDigits: 0 })}K
             </p>
-            <p className="text-xs text-slate-500">ชำระแล้ว</p>
+            <p className="text-xs text-emerald-500 mb-1 text-left">{(summary.paid?.unitCount || 0).toLocaleString()} ยูนิต</p>
+            <p className="text-xs text-slate-500 font-medium text-left">ชำระแล้ว</p>
           </button>
 
           {/* ชำระบางส่วน */}
           <button
             onClick={() => handleStatusClick('partial_payment')}
-            className={`card transition-all ${statusFilter === 'partial_payment' ? 'ring-2 ring-blue-500 shadow-md' : 'hover:shadow-md hover:border-blue-200'}`}
+            className={`card text-left transition-all ${statusFilter === 'partial_payment' ? 'ring-2 ring-blue-500 shadow-md' : 'hover:shadow-md hover:border-blue-200'}`}
           >
             <div className="flex items-start justify-between mb-2">
               <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center">
                 <Clock className="w-4 h-4" />
               </div>
               <span className="text-xs font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">
-                {summary.totalAmount > 0 ? `${(((summary.partial?.amount || 0) / summary.totalAmount) * 100).toFixed(0)}%` : '0%'}
+                {summary.totalAmount > 0 ? ((summary.partial?.amount || 0) / summary.totalAmount * 100).toFixed(0) : 0}%
               </span>
             </div>
-            <p className="text-xl font-bold text-blue-600 mb-0.5">
+            <p className="text-xl font-bold text-blue-600 text-left">
               ฿{((summary.partial?.amount || 0) / 1000).toLocaleString('en-US', { maximumFractionDigits: 0 })}K
             </p>
-            <p className="text-xs text-slate-500">ชำระแล้วบางส่วน</p>
+            <p className="text-xs text-blue-500 mb-1 text-left">{(summary.partial?.unitCount || 0).toLocaleString()} ยูนิต</p>
+            <p className="text-xs text-slate-500 font-medium text-left">ชำระบางส่วน</p>
           </button>
 
           {/* รอชำระ */}
           <button
             onClick={() => handleStatusClick('active')}
-            className={`card transition-all ${statusFilter === 'active' ? 'ring-2 ring-amber-500 shadow-md' : 'hover:shadow-md hover:border-amber-200'}`}
+            className={`card text-left transition-all ${statusFilter === 'active' ? 'ring-2 ring-amber-500 shadow-md' : 'hover:shadow-md hover:border-amber-200'}`}
           >
             <div className="flex items-start justify-between mb-2">
               <div className="w-8 h-8 bg-amber-100 text-amber-600 rounded-lg flex items-center justify-center">
                 <AlertCircle className="w-4 h-4" />
               </div>
               <span className="text-xs font-medium text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">
-                {summary.totalAmount > 0 ? `${(((summary.active?.amount || 0) / summary.totalAmount) * 100).toFixed(0)}%` : '0%'}
+                {summary.totalAmount > 0 ? ((summary.active?.amount || 0) / summary.totalAmount * 100).toFixed(0) : 0}%
               </span>
             </div>
-            <p className="text-xl font-bold text-amber-600 mb-0.5">
+            <p className="text-xl font-bold text-amber-600 text-left">
               ฿{((summary.active?.amount || 0) / 1000).toLocaleString('en-US', { maximumFractionDigits: 0 })}K
             </p>
-            <p className="text-xs text-slate-500">รอรับชำระ</p>
+            <p className="text-xs text-amber-500 mb-1 text-left">{(summary.active?.unitCount || 0).toLocaleString()} ยูนิต</p>
+            <p className="text-xs text-slate-500 font-medium text-left">รอรับชำระ</p>
           </button>
 
-          {/* ค้างชำระ - แสดง สะสม/ปีที่เลือก */}
+          {/* ค้างชำระ - แสดง ปีนี้/สะสม (แตกต่างจากอันอื่น) */}
           <button
             onClick={() => handleStatusClick('overdue')}
-            className={`card transition-all ${statusFilter === 'overdue' ? 'ring-2 ring-red-500 shadow-md' : 'hover:shadow-md hover:border-red-200'}`}
+            className={`card text-left transition-all ${statusFilter === 'overdue' ? 'ring-2 ring-red-500 shadow-md' : 'hover:shadow-md hover:border-red-200'}`}
           >
             <div className="flex items-start justify-between mb-2">
               <div className="w-8 h-8 bg-red-100 text-red-600 rounded-lg flex items-center justify-center">
                 <XCircle className="w-4 h-4" />
               </div>
-              <span className="text-xs font-medium text-red-600 bg-red-50 px-1.5 py-0.5 rounded-full">
-                {(summary.overdue?.cumulativeCount || 0).toLocaleString()}/{(summary.overdue?.yearlyCount || 0).toLocaleString()}
-              </span>
             </div>
-            {/* แสดงยอด สะสม/ปีที่เลือก */}
-            <p className="text-xl font-bold text-red-600 mb-0.5">
-              {((summary.overdue?.cumulativeAmount || 0) / 1000).toLocaleString('en-US', { maximumFractionDigits: 0 })}/{((summary.overdue?.amount || 0) / 1000).toLocaleString('en-US', { maximumFractionDigits: 0 })}K
+            {/* ยอดเงิน พร้อม % เพิ่มขึ้นเป็นตัวห้อย */}
+            <div className="flex items-baseline gap-1 justify-start">
+              <p className="text-xl font-bold text-red-600 text-left">
+                ฿{((summary.overdue?.amount || 0) / 1000).toLocaleString('en-US', { maximumFractionDigits: 0 })}<span className="text-base">/</span>{(((summary.overdue?.amount || 0) + (summary.overdue?.cumulativeAmount || 0)) / 1000).toLocaleString('en-US', { maximumFractionDigits: 0 })}K
+              </p>
+              {(summary.overdue?.cumulativeAmount || 0) > 0 && (
+                <span className="text-[10px] font-semibold text-red-500">
+                  +{(((summary.overdue?.amount || 0) / (summary.overdue?.cumulativeAmount || 1)) * 100).toFixed(0)}%
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-red-500 mb-1 text-left">
+              {(summary.overdue?.totalUnitCount || 0).toLocaleString()} ยูนิต
             </p>
-            <p className="text-xs text-slate-500">ค้างชำระ (สะสม/ปีนี้)</p>
+            <p className="text-xs text-slate-500 font-medium text-left">ค้างชำระ (ปีนี้/สะสม)</p>
           </button>
 
           {/* ยกเลิก */}
           <button
             onClick={() => handleStatusClick('void')}
-            className={`card transition-all ${statusFilter === 'void' ? 'ring-2 ring-slate-500 shadow-md' : 'hover:shadow-md hover:border-slate-200'}`}
+            className={`card text-left transition-all ${statusFilter === 'void' ? 'ring-2 ring-slate-500 shadow-md' : 'hover:shadow-md hover:border-slate-200'}`}
           >
             <div className="flex items-start justify-between mb-2">
               <div className="w-8 h-8 bg-slate-100 text-slate-500 rounded-lg flex items-center justify-center">
                 <XCircle className="w-4 h-4" />
               </div>
               <span className="text-xs font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full">
-                {summary.totalAmount > 0 ? `${(((summary.void?.amount || 0) / summary.totalAmount) * 100).toFixed(0)}%` : '0%'}
+                {summary.totalAmount > 0 ? ((summary.void?.amount || 0) / summary.totalAmount * 100).toFixed(0) : 0}%
               </span>
             </div>
-            <p className="text-xl font-bold text-slate-500 mb-0.5">
+            <p className="text-xl font-bold text-slate-500 text-left">
               ฿{((summary.void?.amount || 0) / 1000).toLocaleString('en-US', { maximumFractionDigits: 0 })}K
             </p>
-            <p className="text-xs text-slate-500">ยกเลิก</p>
+            <p className="text-xs text-slate-400 mb-1 text-left">{(summary.void?.unitCount || 0).toLocaleString()} ยูนิต</p>
+            <p className="text-xs text-slate-500 font-medium text-left">ยกเลิก</p>
           </button>
 
         </div>
@@ -440,7 +496,9 @@ export function CollectionDetailPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
             <div className="flex items-center gap-2">
               <FileText className="w-5 h-5 text-slate-500" />
-              <h3 className="font-semibold text-slate-800">รายการเรียกเก็บและการชำระ</h3>
+              <h3 className="font-semibold text-slate-800">
+                {showAll ? 'รายการทั้งหมด' : 'Top 10'} - เรียงตาม{sortLabels[sortBy]}
+              </h3>
               {statusFilter !== 'all' && statusConfig[statusFilter] && (
                 <span className="px-2 py-0.5 text-xs font-medium bg-primary-100 text-primary-700 rounded-full">
                   กรอง: {statusConfig[statusFilter].label}
@@ -448,7 +506,44 @@ export function CollectionDetailPage() {
               )}
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Sort Controls */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-slate-500">เรียงตาม</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => handleSortByChange(e.target.value as typeof sortBy)}
+                  className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="billed_amount">ยอดเรียกเก็บ</option>
+                  <option value="issued_date">วันที่ออกบิล</option>
+                  <option value="due_date">กำหนดชำระ</option>
+                  <option value="paid_date">วันที่ชำระ</option>
+                  <option value="unit">ยูนิต</option>
+                  <option value="owner">เจ้าของ</option>
+                  <option value="doc_number">เลขที่บิล</option>
+                  <option value="status">สถานะ</option>
+                </select>
+                <select
+                  value={sortOrder}
+                  onChange={(e) => handleSortOrderChange(e.target.value as 'asc' | 'desc')}
+                  className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="desc">มากไปน้อย</option>
+                  <option value="asc">น้อยไปมาก</option>
+                </select>
+              </div>
+
+              {/* Show All Toggle */}
+              {pagination.totalItems > 10 && (
+                <button
+                  onClick={handleShowAllToggle}
+                  className="px-3 py-1.5 text-sm font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-50 rounded-lg transition-colors"
+                >
+                  {showAll ? 'แสดง Top 10' : 'ดูทั้งหมด'}
+                </button>
+              )}
+
               {/* Search */}
               <form onSubmit={handleSearch} className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -706,85 +801,96 @@ export function CollectionDetailPage() {
                 </table>
               </div>
 
-              {/* Pagination */}
-              <div className="flex flex-col md:flex-row items-center justify-between gap-4 mt-4 pt-4 border-t border-slate-100">
-                <div className="flex items-center gap-4">
-                  <p className="text-sm text-slate-500">
-                    แสดง {startItem.toLocaleString()}-{endItem.toLocaleString()} จาก {pagination.totalItems.toLocaleString()} รายการ
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-slate-500">แสดง</span>
-                    <select
-                      value={pageSize}
-                      onChange={(e) => {
-                        setPageSize(Number(e.target.value));
-                        setCurrentPage(1);
-                      }}
-                      className="border border-slate-200 rounded px-2 py-1 text-sm"
+              {/* Pagination - only show when showAll is true */}
+              {showAll && (
+                <div className="flex flex-col md:flex-row items-center justify-between gap-4 mt-4 pt-4 border-t border-slate-100">
+                  <div className="flex items-center gap-4">
+                    <p className="text-sm text-slate-500">
+                      แสดง {startItem.toLocaleString()}-{endItem.toLocaleString()} จาก {pagination.totalItems.toLocaleString()} รายการ
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-slate-500">แสดง</span>
+                      <select
+                        value={pageSize}
+                        onChange={(e) => {
+                          setPageSize(Number(e.target.value));
+                          setCurrentPage(1);
+                        }}
+                        className="border border-slate-200 rounded px-2 py-1 text-sm"
+                      >
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                      </select>
+                      <span className="text-sm text-slate-500">รายการ</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => goToPage(1)}
+                      disabled={currentPage === 1}
+                      className="p-2 rounded hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="หน้าแรก"
                     >
-                      <option value={25}>25</option>
-                      <option value={50}>50</option>
-                      <option value={100}>100</option>
-                    </select>
-                    <span className="text-sm text-slate-500">รายการ</span>
+                      <ChevronsLeft className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      onClick={() => goToPage(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="p-2 rounded hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="ก่อนหน้า"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+
+                    {getPageNumbers().map((page, index) => (
+                      <button
+                        key={index}
+                        onClick={() => typeof page === 'number' && goToPage(page)}
+                        disabled={page === '...'}
+                        className={`min-w-[36px] h-9 px-3 rounded text-sm font-medium transition-colors ${
+                          page === currentPage
+                            ? 'bg-primary-600 text-white'
+                            : page === '...'
+                            ? 'cursor-default'
+                            : 'hover:bg-slate-100'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+
+                    <button
+                      onClick={() => goToPage(currentPage + 1)}
+                      disabled={currentPage === pagination.totalPages}
+                      className="p-2 rounded hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="ถัดไป"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      onClick={() => goToPage(pagination.totalPages)}
+                      disabled={currentPage === pagination.totalPages}
+                      className="p-2 rounded hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="หน้าสุดท้าย"
+                    >
+                      <ChevronsRight className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
+              )}
 
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => goToPage(1)}
-                    disabled={currentPage === 1}
-                    className="p-2 rounded hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="หน้าแรก"
-                  >
-                    <ChevronsLeft className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    onClick={() => goToPage(currentPage - 1)}
-                    disabled={currentPage === 1}
-                    className="p-2 rounded hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="ก่อนหน้า"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-
-                  {getPageNumbers().map((page, index) => (
-                    <button
-                      key={index}
-                      onClick={() => typeof page === 'number' && goToPage(page)}
-                      disabled={page === '...'}
-                      className={`min-w-[36px] h-9 px-3 rounded text-sm font-medium transition-colors ${
-                        page === currentPage
-                          ? 'bg-primary-600 text-white'
-                          : page === '...'
-                          ? 'cursor-default'
-                          : 'hover:bg-slate-100'
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  ))}
-
-                  <button
-                    onClick={() => goToPage(currentPage + 1)}
-                    disabled={currentPage === pagination.totalPages}
-                    className="p-2 rounded hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="ถัดไป"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    onClick={() => goToPage(pagination.totalPages)}
-                    disabled={currentPage === pagination.totalPages}
-                    className="p-2 rounded hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="หน้าสุดท้าย"
-                  >
-                    <ChevronsRight className="w-4 h-4" />
-                  </button>
+              {/* Show count in Top 10 mode */}
+              {!showAll && data.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-slate-100">
+                  <p className="text-sm text-slate-500">
+                    แสดง {data.length} จาก {pagination.totalItems.toLocaleString()} รายการ
+                  </p>
                 </div>
-              </div>
+              )}
             </>
           )}
         </div>

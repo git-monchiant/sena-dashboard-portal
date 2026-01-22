@@ -1,5 +1,28 @@
 import { SiteFilterValues } from '../components';
 
+// Collection Summary - เหมือนกับหน้า Collection
+export interface CollectionSummary {
+  total: number;
+  totalUnitCount: number;
+  totalAmount: number;
+  paid: { count: number; unitCount: number; amount: number };
+  partial: { count: number; unitCount: number; amount: number };
+  active: { count: number; unitCount: number; amount: number };
+  overdue: {
+    count: number;
+    unitCount: number;
+    amount: number;
+    yearlyCount: number;
+    yearlyUnitCount: number;
+    cumulativeAmount: number;
+    cumulativeCount: number;
+    cumulativeUnitCount: number;
+    totalUnitCount: number;
+  };
+  void: { count: number; unitCount: number; amount: number };
+  draft: { count: number; unitCount: number; amount: number };
+}
+
 export interface CommonFeeKPIData {
   totalBilled: {
     value: string;
@@ -65,6 +88,23 @@ export interface SyncInfo {
   status: 'synced' | 'syncing' | 'error';
 }
 
+export interface ExpenseSummaryItem {
+  id: string;
+  name: string;
+  count: number;
+  amount: number;
+}
+
+export interface ExpenseSummaryData {
+  data: ExpenseSummaryItem[];
+  totalInvoices: number;
+  filters: {
+    site_id?: string;
+    year?: string;
+    status?: string;
+  };
+}
+
 export interface CommonFeeOverviewData {
   kpis: CommonFeeKPIData;
   statusDistribution: StatusDistribution;
@@ -75,6 +115,8 @@ export interface CommonFeeOverviewData {
   availableYears: number[];
   selectedYear: number;
   trendUnit: string;
+  // Collection summary - เหมือนหน้า Collection (รวมทุก project)
+  summary: CollectionSummary;
 }
 
 export async function fetchCommonFeeOverview(
@@ -98,14 +140,51 @@ export async function fetchCommonFeeOverview(
     params.set('pay_group', filters.payGroup);
   }
 
-  const url = `/api/common-fee/overview${params.toString() ? `?${params}` : ''}`;
-  const response = await fetch(url);
+  // Fetch both overview and collection data in parallel
+  const overviewUrl = `/api/common-fee/overview${params.toString() ? `?${params}` : ''}`;
 
-  if (!response.ok) {
+  // Collection params - ใช้ filter เหมือนกับ overview (ยกเว้น status)
+  const collectionParams = new URLSearchParams();
+  if (filters.siteId) {
+    collectionParams.set('site_id', filters.siteId);
+  }
+  if (filters.year && filters.year !== 'all') {
+    collectionParams.set('year', filters.year);
+  }
+  if (filters.payGroup) {
+    collectionParams.set('pay_group', filters.payGroup);
+  }
+  collectionParams.set('limit', '1'); // แค่ต้องการ summary ไม่ต้องดึง data มาก
+  const collectionUrl = `/api/common-fee/collection?${collectionParams}`;
+
+  const [overviewResponse, collectionResponse] = await Promise.all([
+    fetch(overviewUrl),
+    fetch(collectionUrl),
+  ]);
+
+  if (!overviewResponse.ok) {
     throw new Error('Failed to fetch overview data');
   }
 
-  const data = await response.json();
+  const data = await overviewResponse.json();
+
+  // Get collection summary (with status breakdown)
+  let summary: CollectionSummary = {
+    total: 0,
+    totalUnitCount: 0,
+    totalAmount: 0,
+    paid: { count: 0, unitCount: 0, amount: 0 },
+    partial: { count: 0, unitCount: 0, amount: 0 },
+    active: { count: 0, unitCount: 0, amount: 0 },
+    overdue: { count: 0, unitCount: 0, amount: 0, yearlyCount: 0, yearlyUnitCount: 0, cumulativeAmount: 0, cumulativeCount: 0, cumulativeUnitCount: 0 },
+    void: { count: 0, unitCount: 0, amount: 0 },
+    draft: { count: 0, unitCount: 0, amount: 0 },
+  };
+
+  if (collectionResponse.ok) {
+    const collectionData = await collectionResponse.json();
+    summary = collectionData.summary;
+  }
 
   // Map API response to CommonFeeOverviewData
   return {
@@ -129,5 +208,27 @@ export async function fetchCommonFeeOverview(
     availableYears: data.availableYears || [],
     selectedYear: data.selectedYear || new Date().getFullYear(),
     trendUnit: data.trendUnit || 'M',
+    summary,
   };
+}
+
+export async function fetchExpenseSummary(
+  filters: SiteFilterValues
+): Promise<ExpenseSummaryData> {
+  const params = new URLSearchParams();
+  if (filters.siteId) {
+    params.set('site_id', filters.siteId);
+  }
+  if (filters.year && filters.year !== 'all') {
+    params.set('year', filters.year);
+  }
+
+  const url = `/api/common-fee/expense-summary${params.toString() ? `?${params}` : ''}`;
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch expense summary');
+  }
+
+  return response.json();
 }
