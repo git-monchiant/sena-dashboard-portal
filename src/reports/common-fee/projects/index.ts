@@ -1,0 +1,1 @@
+export { ProjectCollectionPage } from './page';

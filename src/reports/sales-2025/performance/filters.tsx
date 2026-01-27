@@ -135,7 +135,7 @@ interface Props {
   initialFilters?: FilterState;
 }
 
-const API_URL = 'http://localhost:3001';
+const API_URL = ''; // Use Vite proxy
 const STORAGE_KEY = 'sales2025-filters';
 
 // Helper to get filters from localStorage

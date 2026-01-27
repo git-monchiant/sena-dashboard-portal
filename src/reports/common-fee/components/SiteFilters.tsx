@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Filter, Search, ChevronDown, X } from 'lucide-react';
 
 // ===== Searchable Select Component =====
@@ -127,34 +128,30 @@ interface Status {
   count: string;
 }
 
-interface Period {
-  period: string;
-  display: string;
-  invoice_count: string;
-}
-
 interface FilterOptions {
   sites: Site[];
   statuses: Status[];
-  periods: Period[];
 }
 
 export interface SiteFilterValues {
   siteId: string;
-  period: string;
   status: string;
   year: string;
   payGroup: string;
+  projectType: string; // 'condo' | 'lowrise' | ''
+  startMonth: string; // YYYY-MM format
+  endMonth: string;   // YYYY-MM format
 }
 
 interface SiteFiltersProps {
   onApply: (filters: SiteFilterValues) => void;
   initialValues?: Partial<SiteFilterValues>;
   storageKey?: string;
-  showPeriod?: boolean;
   showStatus?: boolean;
   showYear?: boolean;
   showPayGroup?: boolean;
+  showProjectType?: boolean;
+  showSite?: boolean;
 }
 
 const statusLabels: Record<string, string> = {
@@ -168,14 +165,6 @@ const statusLabels: Record<string, string> = {
   waiting_fix: 'รอแก้ไข',
 };
 
-const payGroupLabels: Record<string, string> = {
-  all: 'ทั้งหมด',
-  owner: 'เจ้าของห้อง',
-  developer: 'ผู้พัฒนา',
-  rent: 'ผู้เช่า',
-  agent: 'ตัวแทน',
-};
-
 const payGroupOptions: SelectOption[] = [
   { value: 'owner', label: 'เจ้าของห้อง' },
   { value: 'developer', label: 'ผู้พัฒนา' },
@@ -183,8 +172,28 @@ const payGroupOptions: SelectOption[] = [
   { value: 'agent', label: 'ตัวแทน' },
 ];
 
+const projectTypeOptions: SelectOption[] = [
+  { value: 'condo', label: 'แนวสูง (คอนโด)' },
+  { value: 'lowrise', label: 'แนวราบ' },
+];
+
 // Statuses to show in dropdown (in order)
 const allowedStatuses = ['all', 'active', 'overdue', 'paid', 'partial_payment', 'void'];
+
+// Generate year options for select (last 5 years)
+function generateYearOptions(): SelectOption[] {
+  const options: SelectOption[] = [];
+  const currentYear = new Date().getFullYear();
+
+  for (let i = 0; i < 5; i++) {
+    const year = currentYear - i;
+    options.push({
+      value: year.toString(),
+      label: year.toString(), // CE year (ค.ศ.)
+    });
+  }
+  return options;
+}
 
 function getFiltersFromStorage(key: string): SiteFilterValues | null {
   try {
@@ -217,34 +226,64 @@ export function SiteFilters({
   onApply,
   initialValues,
   storageKey = 'common-fee-site-filters',
-  showPeriod = true,
   showStatus = true,
   showYear = true,
   showPayGroup = true,
+  showProjectType = true,
+  showSite = true,
 }: SiteFiltersProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null);
-  const [periods, setPeriods] = useState<Period[]>([]);
-  const [periodsLoading, setPeriodsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const hasAppliedInitial = useRef(false);
 
-  // Generate year options: current year + 15 years back
-  const currentYear = new Date().getFullYear();
-  const availableYears = Array.from({ length: 16 }, (_, i) => currentYear - i);
+  // Get URL params for initialization
+  const urlYear = searchParams.get('year');
+  const urlSiteId = searchParams.get('siteId');
+  const hasUrlParams = !!(urlYear || urlSiteId);
 
-  // Filter state - restore from localStorage
+  // Filter state - check URL params first, then localStorage, then initialValues
   const [filters, setFilters] = useState<SiteFilterValues>(() => {
     const saved = getFiltersFromStorage(storageKey);
-    if (saved) return { ...saved, payGroup: saved.payGroup === 'all' ? '' : (saved.payGroup || '') };
-    return {
+
+    // Base values from localStorage or defaults
+    const baseFilters: SiteFilterValues = saved ? {
+      ...saved,
+      payGroup: saved.payGroup === 'all' ? '' : (saved.payGroup || ''),
+      year: saved.year || new Date().getFullYear().toString(),
+      projectType: saved.projectType || '',
+    } : {
       siteId: initialValues?.siteId || '',
-      period: initialValues?.period || '',
       status: initialValues?.status || 'all',
       year: initialValues?.year || new Date().getFullYear().toString(),
       payGroup: initialValues?.payGroup || '',
+      projectType: initialValues?.projectType || '',
+      startMonth: '',
+      endMonth: '',
     };
+
+    // Override with URL params if present (highest priority)
+    if (urlYear) baseFilters.year = urlYear;
+    if (urlSiteId) baseFilters.siteId = urlSiteId;
+
+    // Save to localStorage if URL params were used
+    if (urlYear || urlSiteId) {
+      saveFiltersToStorage(storageKey, baseFilters);
+    }
+
+    return baseFilters;
   });
+
+  // Clear URL params after reading (in useEffect to avoid side effects during render)
+  useEffect(() => {
+    if (hasUrlParams) {
+      setSearchParams({}, { replace: true });
+    }
+  }, []);
+
+  // Year options for dropdown
+  const yearOptions = generateYearOptions();
 
   // 1. Fetch filter options (sites, statuses) - NOT periods
   useEffect(() => {
@@ -258,7 +297,6 @@ export function SiteFilters({
         setFilterOptions({
           sites: data.sites,
           statuses: data.statuses,
-          periods: [] // Periods will be fetched by the other effect
         });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error loading filters');
@@ -270,53 +308,15 @@ export function SiteFilters({
     fetchFilterOptions();
   }, []);
 
-  // 2. Fetch periods based on current siteId - runs on mount and when siteId changes
+  // Apply initial filters on mount
   useEffect(() => {
-    if (!showPeriod) {
-      // If not showing period, still apply initial filters
-      if (!hasAppliedInitial.current) {
-        hasAppliedInitial.current = true;
-        onApply(filters);
-      }
-      return;
+    if (!hasAppliedInitial.current) {
+      hasAppliedInitial.current = true;
+      onApply(filters);
     }
-
-    async function fetchPeriods() {
-      setPeriodsLoading(true);
-      try {
-        // Always fetch based on current siteId
-        const url = filters.siteId
-          ? `/api/common-fee/periods?site_id=${filters.siteId}`
-          : '/api/common-fee/periods';
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('Failed to fetch periods');
-        const data: Period[] = await response.json();
-        setPeriods(data);
-
-        // Apply initial filters once after periods are loaded
-        if (!hasAppliedInitial.current) {
-          hasAppliedInitial.current = true;
-          onApply(filters);
-        }
-      } catch (err) {
-        console.error('Failed to fetch periods:', err);
-      } finally {
-        setPeriodsLoading(false);
-      }
-    }
-
-    fetchPeriods();
-  }, [filters.siteId, showPeriod]); // Only depends on siteId
+  }, []);
 
   const handleChange = (key: keyof SiteFilterValues, value: string) => {
-    // When site changes, reset period to empty (ทุกงวด)
-    if (key === 'siteId') {
-      const newFilters = { ...filters, siteId: value, period: '' };
-      setFilters(newFilters);
-      saveFiltersToStorage(storageKey, newFilters);
-      onApply(newFilters);
-      return;
-    }
 
     const newFilters = { ...filters, [key]: value };
     setFilters(newFilters);
@@ -327,10 +327,12 @@ export function SiteFilters({
   const handleClear = () => {
     const cleared: SiteFilterValues = {
       siteId: '',
-      period: '',
       status: 'all',
       year: new Date().getFullYear().toString(),
       payGroup: '',
+      projectType: '',
+      startMonth: '',
+      endMonth: '',
     };
     setFilters(cleared);
     clearFiltersFromStorage(storageKey);
@@ -358,26 +360,29 @@ export function SiteFilters({
   }
 
   // Prepare options for SearchableSelect
-  const siteOptions: SelectOption[] = filterOptions?.sites.map(s => ({
-    value: String(s.id),
-    label: `${s.display_name} (${parseInt(s.invoice_count).toLocaleString()})`,
-  })) || [];
-
-  const periodOptions: SelectOption[] = periods.map(p => ({
-    value: p.period,
-    label: `${p.display} (${parseInt(p.invoice_count).toLocaleString()})`,
-  }));
+  const siteOptions: SelectOption[] = filterOptions?.sites.map(s => {
+    const count = parseInt(s.invoice_count);
+    const countLabel = isNaN(count) ? '' : ` (${count.toLocaleString()})`;
+    return {
+      value: String(s.id),
+      label: `${s.display_name}${countLabel}`,
+    };
+  }) || [];
 
   const statusOptions: SelectOption[] = filterOptions?.statuses
     .filter(s => allowedStatuses.includes(s.status))
     .sort((a, b) => allowedStatuses.indexOf(a.status) - allowedStatuses.indexOf(b.status))
-    .map(s => ({
-      value: s.status,
-      label: `${statusLabels[s.status] || s.status} (${parseInt(s.count).toLocaleString()})`,
-    })) || [];
+    .map(s => {
+      const count = parseInt(s.count);
+      const countLabel = isNaN(count) ? '' : ` (${count.toLocaleString()})`;
+      return {
+        value: s.status,
+        label: `${statusLabels[s.status] || s.status}${countLabel}`,
+      };
+    }) || [];
 
   // Calculate grid columns based on what's shown
-  const gridCols = (showYear ? 1 : 0) + 1 + (showPeriod ? 1 : 0) + (showStatus ? 1 : 0) + (showPayGroup ? 1 : 0) + 1; // year? + site + period? + status? + payGroup? + clear button
+  const gridCols = (showYear ? 1 : 0) + (showSite ? 1 : 0) + (showProjectType ? 1 : 0) + (showStatus ? 1 : 0) + (showPayGroup ? 1 : 0) + 1;
 
   return (
     <div className="card mb-6">
@@ -391,41 +396,37 @@ export function SiteFilters({
         {showYear && (
           <div>
             <label className="block text-sm font-medium text-slate-600 mb-1">ปี</label>
-            <select
+            <SearchableSelect
               value={filters.year}
-              onChange={(e) => handleChange('year', e.target.value)}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white text-slate-800"
-            >
-              {availableYears.map((y) => (
-                <option key={y} value={String(y)}>{y}</option>
-              ))}
-            </select>
+              onChange={(val) => handleChange('year', val || new Date().getFullYear().toString())}
+              options={yearOptions}
+              placeholder="เลือกปี"
+            />
           </div>
         )}
 
         {/* Site Filter */}
-        <div>
-          <label className="block text-sm font-medium text-slate-600 mb-1">โครงการ / Site</label>
-          <SearchableSelect
-            value={filters.siteId}
-            onChange={(val) => handleChange('siteId', val)}
-            options={siteOptions}
-            placeholder="ทุกโครงการ"
-          />
-        </div>
-
-        {/* Period Filter */}
-        {showPeriod && (
+        {showSite && (
           <div>
-            <label className="block text-sm font-medium text-slate-600 mb-1">
-              งวดเรียกเก็บ
-              {periodsLoading && <span className="ml-2 text-xs text-slate-400">(กำลังโหลด...)</span>}
-            </label>
+            <label className="block text-sm font-medium text-slate-600 mb-1">โครงการ / Site</label>
             <SearchableSelect
-              value={filters.period}
-              onChange={(val) => handleChange('period', val)}
-              options={periodOptions}
-              placeholder="ทุกงวด"
+              value={filters.siteId}
+              onChange={(val) => handleChange('siteId', val)}
+              options={siteOptions}
+              placeholder="ทุกโครงการ"
+            />
+          </div>
+        )}
+
+        {/* Project Type Filter */}
+        {showProjectType && (
+          <div>
+            <label className="block text-sm font-medium text-slate-600 mb-1">ประเภทโครงการ</label>
+            <SearchableSelect
+              value={filters.projectType}
+              onChange={(val) => handleChange('projectType', val)}
+              options={projectTypeOptions}
+              placeholder="ทั้งหมด"
             />
           </div>
         )}

@@ -471,8 +471,6 @@ router.get('/marketing', asyncHandler(async (req, res) => {
   const query = `SELECT s.* FROM sales_mkt s WHERE ${baseWhere}${projectFilter}`;
   const result = await pool.query(query, params);
 
-  const quarterList = quarter ? [quarter] : ['Q1', 'Q2', 'Q3', 'Q4'];
-
   let summary = {
     totalLead: 0,
     qualityLead: 0,
@@ -484,20 +482,31 @@ router.get('/marketing', asyncHandler(async (req, res) => {
     revenue: 0,
   };
 
+  // Determine which months to sum based on quarter filter
+  const quarterMonthMap = {
+    Q1: ['Jan', 'Feb', 'Mar'],
+    Q2: ['Apr', 'May', 'Jun'],
+    Q3: ['Jul', 'Aug', 'Sep'],
+    Q4: ['Oct', 'Nov', 'Dec'],
+  };
+  const monthsToSum = quarter
+    ? quarterMonthMap[quarter]
+    : monthOrder; // All 12 months if no quarter filter
+
   const projects = result.rows.map(row => {
     let mktExpense = 0, totalLead = 0, qualityLead = 0, walk = 0, book = 0;
     let booking = 0, contract = 0, revenue = 0;
 
-    quarterList.forEach(q => {
-      mktExpense += getQuarterlySum(row, 'mktexpense_', '', q);
-      totalLead += getQuarterlySum(row, 'totallead_', '', q);
-      qualityLead += getQuarterlySum(row, 'qualitylead_', '', q);
-      walk += getQuarterlySum(row, 'lead_walk_', '', q);
-      book += getQuarterlySum(row, 'lead_book_', '', q);
-      booking += getQuarterlySum(row, 'book_', '_thb', q);
-      contract += getQuarterlySum(row, 'contract_', '_thb', q);
-      revenue += getQuarterlySum(row, 'revenue_', '_thb', q);
-    });
+    // Marketing data: use monthly sum based on quarter filter
+    mktExpense = getMonthlySum(row, 'mktexpense_', '', monthsToSum);
+    totalLead = getMonthlySum(row, 'totallead_', '', monthsToSum);
+    qualityLead = getMonthlySum(row, 'qualitylead_', '', monthsToSum);
+    walk = getMonthlySum(row, 'lead_walk_', '', monthsToSum);
+    book = getMonthlySum(row, 'lead_book_', '', monthsToSum);
+    // Sales data: use same months
+    booking = getMonthlySum(row, 'book_', '_thb', monthsToSum);
+    contract = getMonthlySum(row, 'contract_', '_thb', monthsToSum);
+    revenue = getMonthlySum(row, 'revenue_', '_thb', monthsToSum);
 
     const presaleActual = booking + contract;
 
@@ -670,7 +679,7 @@ router.get('/projects', asyncHandler(async (req, res) => {
     let revenue, mktExpense, totalLead, qualityLead, leadWalk, leadBook;
 
     if (monthsToSum && monthsToSum.length > 0) {
-      // Use only months this VP/MGR manages
+      // Use only months this VP/MGR manages for all data
       revenue = getMonthlySum(row, 'revenue_', '_thb', monthsToSum);
       mktExpense = getMonthlySum(row, 'mktexpense_', '', monthsToSum);
       totalLead = getMonthlySum(row, 'totallead_', '', monthsToSum);
@@ -678,21 +687,28 @@ router.get('/projects', asyncHandler(async (req, res) => {
       leadWalk = getMonthlySum(row, 'lead_walk_', '', monthsToSum);
       leadBook = getMonthlySum(row, 'lead_book_', '', monthsToSum);
     } else if (q) {
-      // No VP/MGR filter but quarter specified
-      revenue = getQuarterlySum(row, 'revenue_', '_thb', q);
-      mktExpense = getQuarterlySum(row, 'mktexpense_', '', q);
-      totalLead = getQuarterlySum(row, 'totallead_', '', q);
-      qualityLead = getQuarterlySum(row, 'qualitylead_', '', q);
-      leadWalk = getQuarterlySum(row, 'lead_walk_', '', q);
-      leadBook = getQuarterlySum(row, 'lead_book_', '', q);
+      // No VP/MGR filter but quarter specified - use quarter months
+      const quarterMonthMap = {
+        Q1: ['Jan', 'Feb', 'Mar'],
+        Q2: ['Apr', 'May', 'Jun'],
+        Q3: ['Jul', 'Aug', 'Sep'],
+        Q4: ['Oct', 'Nov', 'Dec'],
+      };
+      const qMonths = quarterMonthMap[q] || monthOrder;
+      revenue = getMonthlySum(row, 'revenue_', '_thb', qMonths);
+      mktExpense = getMonthlySum(row, 'mktexpense_', '', qMonths);
+      totalLead = getMonthlySum(row, 'totallead_', '', qMonths);
+      qualityLead = getMonthlySum(row, 'qualitylead_', '', qMonths);
+      leadWalk = getMonthlySum(row, 'lead_walk_', '', qMonths);
+      leadBook = getMonthlySum(row, 'lead_book_', '', qMonths);
     } else {
-      // No filter - use totals
-      revenue = parseNum(row.revenue_totalthb);
-      mktExpense = parseNum(row.mktexpense_total);
-      totalLead = parseNum(row.totallead_total);
-      qualityLead = parseNum(row.qualitylead_total);
-      leadWalk = parseNum(row.lead_walk_total);
-      leadBook = parseNum(row.lead_book_total);
+      // No filter - use all 12 months
+      revenue = getMonthlySum(row, 'revenue_', '_thb', monthOrder);
+      mktExpense = getMonthlySum(row, 'mktexpense_', '', monthOrder);
+      totalLead = getMonthlySum(row, 'totallead_', '', monthOrder);
+      qualityLead = getMonthlySum(row, 'qualitylead_', '', monthOrder);
+      leadWalk = getMonthlySum(row, 'lead_walk_', '', monthOrder);
+      leadBook = getMonthlySum(row, 'lead_book_', '', monthOrder);
     }
 
     const presaleActual = booking + contract + livnex;
@@ -1276,29 +1292,15 @@ router.get('/employee/:name', asyncHandler(async (req, res) => {
     });
   }
 
+  // Get all monthly data (not just totals) so we can filter by responsible months
   const salesDataResult = await pool.query(`
-    SELECT
-      projectcode as project_code,
-      bud,
-      target_presale_totalthb,
-      book_totalthb,
-      contract_totalthb,
-      target_revenue_totalthb,
-      revenue_totalthb,
-      mktexpense_total,
-      totallead_total,
-      qualitylead_total,
-      lead_walk_total,
-      lead_book_total,
-      livnex_totalthb
-    FROM sales_mkt
-    WHERE projectcode = ANY($1)
+    SELECT * FROM sales_mkt WHERE projectcode = ANY($1)
   `, [projectCodes]);
 
   // Build lookup
   const salesLookup = {};
   salesDataResult.rows.forEach(row => {
-    salesLookup[row.project_code] = row;
+    salesLookup[row.projectcode] = row;
   });
 
   // Process projects and calculate totals
@@ -1313,20 +1315,23 @@ router.get('/employee/:name', asyncHandler(async (req, res) => {
   for (const [code, proj] of Object.entries(projectMap)) {
     proj.months = proj.months.sort((a, b) => monthOrder.indexOf(a) - monthOrder.indexOf(b));
     const responsibleQuarters = [...new Set(proj.months.map(m => monthToQuarter(m)).filter(q => q))];
+    const monthsToSum = proj.months; // Use only months this employee is responsible for
 
     const salesData = salesLookup[code] || {};
-    const booking = parseNum(salesData.book_totalthb);
-    const contract = parseNum(salesData.contract_totalthb);
+    // Use getMonthlySum to filter by responsible months only
+    const booking = getMonthlySum(salesData, 'book_', '_thb', monthsToSum);
+    const contract = getMonthlySum(salesData, 'contract_', '_thb', monthsToSum);
     const presaleActual = booking + contract;
-    const presaleTarget = parseNum(salesData.target_presale_totalthb);
-    const revenueTarget = parseNum(salesData.target_revenue_totalthb);
-    const revenueActual = parseNum(salesData.revenue_totalthb);
-    const mktExpense = parseNum(salesData.mktexpense_total);
-    const totalLead = parseNum(salesData.totallead_total);
-    const qualityLead = parseNum(salesData.qualitylead_total);
-    const walk = parseNum(salesData.lead_walk_total);
-    const book = parseNum(salesData.lead_book_total);
-    const livnex = parseNum(salesData.livnex_totalthb);
+    const presaleTarget = getMonthlySum(salesData, 'target_presale_', '_thb', monthsToSum);
+    const revenueTarget = getMonthlySum(salesData, 'target_revenue_', '_thb', monthsToSum);
+    const revenueActual = getMonthlySum(salesData, 'revenue_', '_thb', monthsToSum);
+    // Marketing data: sum all 12 months (data now comes monthly)
+    const mktExpense = getMonthlySum(salesData, 'mktexpense_', '', monthOrder);
+    const totalLead = getMonthlySum(salesData, 'totallead_', '', monthOrder);
+    const qualityLead = getMonthlySum(salesData, 'qualitylead_', '', monthOrder);
+    const walk = getMonthlySum(salesData, 'lead_walk_', '', monthOrder);
+    const book = getMonthlySum(salesData, 'lead_book_', '', monthOrder);
+    const livnex = getMonthlySum(salesData, 'livnex_', '_thb', monthsToSum);
 
     const projectTotals = {
       presaleTarget, presaleActual, revenueTarget, revenueActual,
@@ -1368,6 +1373,54 @@ router.get('/employee/:name', asyncHandler(async (req, res) => {
     mktPctBooking: grandTotals.booking > 0 ? (grandTotals.mktExpense / grandTotals.booking) * 100 : 0,
   };
 
+  // Calculate monthly data for charts (aggregate across all projects for this employee)
+  const monthlyData = monthOrder.map(month => {
+    let presaleTarget = 0, booking = 0, contract = 0, livnex = 0, livnexTarget = 0;
+    let revenueTarget = 0, revenue = 0, cancel = 0;
+    // Marketing fields
+    let mktExpense = 0, totalLead = 0, qualityLead = 0, walk = 0, book = 0;
+
+    // Sum data for this month across all projects this employee is responsible for
+    for (const [code, proj] of Object.entries(projectMap)) {
+      if (!proj.months.includes(month)) continue; // Only count months this employee is responsible for
+      const salesData = salesLookup[code] || {};
+      const monthLower = month.toLowerCase();
+
+      presaleTarget += parseFloat(salesData[`target_presale_${monthLower}_thb`] || '0');
+      booking += parseFloat(salesData[`book_${monthLower}_thb`] || '0');
+      contract += parseFloat(salesData[`contract_${monthLower}_thb`] || '0');
+      livnex += parseFloat(salesData[`livnex_${monthLower}_thb`] || '0');
+      livnexTarget += parseFloat(salesData[`target_livnex_${monthLower}_thb`] || '0');
+      revenueTarget += parseFloat(salesData[`target_revenue_${monthLower}_thb`] || '0');
+      revenue += parseFloat(salesData[`revenue_${monthLower}_thb`] || '0');
+      cancel += parseFloat(salesData[`cancel_${monthLower}_thb`] || '0');
+      // Marketing fields
+      mktExpense += parseFloat(salesData[`mktexpense_${monthLower}`] || '0');
+      totalLead += parseFloat(salesData[`totallead_${monthLower}`] || '0');
+      qualityLead += parseFloat(salesData[`qualitylead_${monthLower}`] || '0');
+      walk += parseFloat(salesData[`lead_walk_${monthLower}`] || '0');
+      book += parseFloat(salesData[`lead_book_${monthLower}`] || '0');
+    }
+
+    return {
+      month,
+      presaleTarget,
+      booking,
+      contract,
+      livnex,
+      livnexTarget,
+      revenueTarget,
+      revenue,
+      cancel,
+      // Marketing fields
+      mktExpense,
+      totalLead,
+      qualityLead,
+      walk,
+      book,
+    };
+  });
+
   res.json({
     name: emp.name,
     position: emp.position,
@@ -1377,6 +1430,7 @@ router.get('/employee/:name', asyncHandler(async (req, res) => {
     projects,
     grandTotals,
     kpis,
+    monthlyData,
   });
 }));
 

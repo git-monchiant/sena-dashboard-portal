@@ -85,26 +85,24 @@ const reportModules: ReportModule[] = [
     icon: Building,
     basePath: '/reports/common-fee',
     items: [
-      { name: 'ภาพรวม', href: '/reports/common-fee' },
-      { name: 'รายละเอียดการเรียกเก็บ', href: '/reports/common-fee/collection' },
+      { name: 'Overview', href: '/reports/common-fee' },
+      { name: 'Project Overview', href: '/reports/common-fee/overview' },
       { name: 'Aging Report', href: '/reports/common-fee/aging' },
-      { name: 'เคสพิเศษ / ติดตามผล', href: '/reports/common-fee/exception' },
-      { name: 'ER Diagram', href: '/reports/common-fee/er-diagram' },
       { name: 'ตั้งค่า', href: '/reports/common-fee/settings' },
     ],
   },
   {
-    name: 'Maintenance Reports',
+    name: 'Quality Reports',
     icon: Wrench,
-    basePath: '/maintenance',
+    basePath: '/quality',
     items: [
-      { name: 'ภาพรวม', href: '/maintenance' },
-      { name: 'รายการงานทั้งหมด', href: '/maintenance/requests' },
-      { name: 'ตามกลุ่มความรับผิดชอบ', href: '/maintenance/by-responsible' },
-      { name: 'Aging Report', href: '/maintenance/aging' },
-      { name: 'ประสิทธิภาพผู้รับเหมา', href: '/maintenance/contractor' },
-      { name: 'งานผิดปกติ', href: '/maintenance/exception' },
-      { name: 'ตั้งค่า', href: '/maintenance/settings' },
+      { name: 'ภาพรวม', href: '/quality' },
+      { name: 'รายการงานทั้งหมด', href: '/quality/requests' },
+      { name: 'ตามกลุ่มความรับผิดชอบ', href: '/quality/by-responsible' },
+      { name: 'Aging Report', href: '/quality/aging' },
+      { name: 'ประสิทธิภาพผู้รับเหมา', href: '/quality/contractor' },
+      { name: 'งานผิดปกติ', href: '/quality/exception' },
+      { name: 'ตั้งค่า', href: '/quality/settings' },
     ],
   },
   {
@@ -122,7 +120,7 @@ function Sidebar() {
   const location = useLocation();
   const { user } = useAuth();
   const [expandedModules, setExpandedModules] = useState<string[]>([
-    '2025 Performance',
+    'Quality Reports',
   ]);
   const [menuVisibility, setMenuVisibility] = useState<MenuVisibility>({
     hiddenCategories: [],

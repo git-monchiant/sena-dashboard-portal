@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '@shared/ui';
 import { Filter, Search, ChevronDown, X } from 'lucide-react';
 
-const API_URL = 'http://localhost:3001';
+const API_URL = ''; // Use Vite proxy
 
 // Searchable Select Component (same as filters.tsx)
 interface SelectOption {
@@ -205,6 +205,7 @@ export function EmployeeListPage() {
   const savedFilters = getEmployeeFiltersFromStorage();
   const [roleFilter, setRoleFilter] = useState<string>(savedFilters?.roleFilter || 'VP');
   const [budFilter, setBudFilter] = useState<string>(savedFilters?.budFilter || '');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [budList, setBudList] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -227,17 +228,27 @@ export function EmployeeListPage() {
     loadEmployees();
   }, []);
 
-  const filteredEmployees = employees.filter((emp) => {
-    // Filter by role type
-    if (roleFilter) {
-      if (roleFilter === 'VP' && emp.roleType !== 'VP') return false;
-      if (roleFilter === 'MGR_SALE' && !(emp.roleType === 'MGR' && emp.department === 'Sale')) return false;
-      if (roleFilter === 'MGR_MKT' && !(emp.roleType === 'MGR' && emp.department === 'Mkt')) return false;
-    }
-    // Filter by BUD
-    if (budFilter && !emp.buds?.includes(budFilter)) return false;
-    return true;
-  });
+  const filteredEmployees = employees
+    .filter((emp) => {
+      // Filter by role type
+      if (roleFilter) {
+        if (roleFilter === 'VP' && emp.roleType !== 'VP') return false;
+        if (roleFilter === 'MGR_SALE' && !(emp.roleType === 'MGR' && emp.department === 'Sale')) return false;
+        if (roleFilter === 'MGR_MKT' && !(emp.roleType === 'MGR' && emp.department === 'Mkt')) return false;
+      }
+      // Filter by BUD
+      if (budFilter && !emp.buds?.includes(budFilter)) return false;
+      // Filter by search query (fulltext search)
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const nameMatch = emp.name.toLowerCase().includes(query);
+        const positionMatch = emp.position?.toLowerCase().includes(query);
+        const budMatch = emp.buds?.some(b => b.toLowerCase().includes(query));
+        if (!nameMatch && !positionMatch && !budMatch) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, 'th'));
 
   const handleRoleChange = (value: string) => {
     setRoleFilter(value);
@@ -252,6 +263,7 @@ export function EmployeeListPage() {
   const handleClearFilter = () => {
     setRoleFilter('VP');
     setBudFilter('');
+    setSearchQuery('');
     saveEmployeeFiltersToStorage('VP', '');
   };
 
@@ -290,7 +302,31 @@ export function EmployeeListPage() {
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            {/* Search Input */}
+            <div className="lg:col-span-2">
+              <label className="block text-sm font-medium text-slate-600 mb-1">ค้นหา</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="ค้นหาชื่อ, ตำแหน่ง, BUD..."
+                  className="w-full pl-9 pr-8 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2"
+                  >
+                    <X className="w-4 h-4 text-slate-400 hover:text-slate-600" />
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* BUD Filter */}
             <div>
               <label className="block text-sm font-medium text-slate-600 mb-1">BUD</label>

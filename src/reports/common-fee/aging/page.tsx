@@ -26,6 +26,7 @@ import {
   Cell,
   PieChart,
   Pie,
+  LabelList,
 } from 'recharts';
 
 const bucketConfig = {
@@ -185,6 +186,7 @@ export function AgingReportPage() {
           onApply={handleApplyFilters}
           storageKey="common-fee-filters"
           showYear={true}
+          showPayGroup={true}
         />
 
         {/* Loading State */}
@@ -206,19 +208,19 @@ export function AgingReportPage() {
               {/* Total Card */}
               <button
                 onClick={() => handleBucketClick('all')}
-                className={`card text-left transition-all ${bucketFilter === 'all' ? 'ring-2 ring-primary-500' : 'hover:bg-slate-50'}`}
+                className={`card text-left transition-all bg-red-600 ${bucketFilter === 'all' ? 'ring-2 ring-red-800' : 'hover:bg-red-700'}`}
               >
                 <div className="flex items-start justify-between mb-2">
-                  <div className="w-8 h-8 bg-slate-100 text-slate-600 rounded-lg flex items-center justify-center">
+                  <div className="w-8 h-8 bg-red-500 text-white rounded-lg flex items-center justify-center">
                     <FileText className="w-4 h-4" />
                   </div>
-                  <span className="text-xs font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full">100%</span>
+                  <span className="text-xs font-medium text-white bg-red-500 px-1.5 py-0.5 rounded-full">100%</span>
                 </div>
-                <p className="text-lg font-bold text-slate-800">
-                  ฿{(data.summary.total.amount / 1000).toLocaleString('en-US', { maximumFractionDigits: 0 })}K
+                <p className="text-lg font-bold text-white">
+                  ฿{Number(data.summary.total.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
-                <p className="text-xs text-slate-400 mb-1">{data.summary.total.count.toLocaleString()} unit</p>
-                <p className="text-xs text-slate-500 font-medium">ค้างชำระทั้งหมด</p>
+                <p className="text-xs text-red-100 mb-1">{data.summary.total.count.toLocaleString()} unit</p>
+                <p className="text-xs text-white font-medium">ค้างชำระทั้งหมด (ถึงปี {filters?.year || new Date().getFullYear()})</p>
               </button>
 
               {/* Bucket Cards */}
@@ -245,7 +247,7 @@ export function AgingReportPage() {
                       </span>
                     </div>
                     <p className={`text-lg font-bold ${config.amountText}`}>
-                      ฿{(bucketData.amount / 1000).toLocaleString('en-US', { maximumFractionDigits: 0 })}K
+                      ฿{Number(bucketData.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                     <p className={`text-xs ${config.countText} mb-1`}>{bucketData.count.toLocaleString()} unit</p>
                     <p className="text-xs text-slate-500 font-medium">{config.label}</p>
@@ -263,22 +265,29 @@ export function AgingReportPage() {
                   <h3 className="font-semibold text-slate-800">ยอดค้างตามช่วงอายุหนี้</h3>
                 </div>
                 <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={chartData}>
+                  <BarChart data={chartData} margin={{ top: 30, right: 10, left: 10, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis dataKey="label" stroke="#64748b" fontSize={12} />
-                    <YAxis stroke="#64748b" fontSize={12} tickFormatter={(v) => `${(v / 1000).toLocaleString()}K`} />
+                    <YAxis stroke="#64748b" fontSize={12} tickFormatter={(v) => v.toLocaleString()} />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: '#fff',
                         border: '1px solid #e2e8f0',
                         borderRadius: '8px',
                       }}
-                      formatter={(value: number) => [`฿${value.toLocaleString()}`, 'ยอดค้าง']}
+                      formatter={(value: number) => [`฿${Number(value || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'ยอดค้าง']}
                     />
                     <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
                       {chartData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
+                      <LabelList
+                        dataKey="amount"
+                        position="top"
+                        fontSize={10}
+                        fill="#64748b"
+                        formatter={(value: number) => value > 0 ? `฿${Number(value).toLocaleString('en-US', { maximumFractionDigits: 0 })}` : ''}
+                      />
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -319,7 +328,7 @@ export function AgingReportPage() {
                               <span className="text-sm text-slate-700">{item.label} วัน</span>
                             </div>
                             <p className="text-sm font-semibold text-slate-800 mt-1">
-                              ฿{item.amount.toLocaleString()} ({item.count} unit)
+                              ฿{Number(item.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({item.count} unit)
                             </p>
                           </div>
                         );
@@ -451,7 +460,7 @@ export function AgingReportPage() {
                               {invoice.project}
                             </td>
                             <td className="py-3 px-4 text-sm font-medium text-slate-800 text-right">
-                              ฿{invoice.amount.toLocaleString()}
+                              ฿{Number(invoice.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
                             <td className="py-3 px-4 text-sm text-slate-600 text-center">
                               {invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString('th-TH') : '-'}

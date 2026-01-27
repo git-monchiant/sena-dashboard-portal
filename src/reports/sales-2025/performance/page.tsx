@@ -25,7 +25,7 @@ import {
   LabelList,
 } from 'recharts';
 
-const API_URL = 'http://localhost:3001';
+const API_URL = ''; // Use Vite proxy
 
 interface FilterState {
   vp: string;

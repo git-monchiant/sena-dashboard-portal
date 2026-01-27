@@ -13,6 +13,7 @@ import { testConnection, closePool } from './db/index.mjs';
 import sales2025V2Routes from './routes/sales-2025-v2.mjs';
 import commonFeeRoutes from './routes/common-fee.mjs';
 import importWizardRoutes from './routes/import-wizard.mjs';
+import qualityRoutes from './routes/quality.mjs';
 
 const app = express();
 
@@ -30,6 +31,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/sales-2025-v2', sales2025V2Routes);
 app.use('/api/common-fee', commonFeeRoutes);
 app.use('/api/import', importWizardRoutes);
+app.use('/api/quality', qualityRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -63,6 +65,7 @@ async function startServer() {
     console.log(`   - Sales 2025: /api/sales-2025-v2`);
     console.log(`   - Common Fee: /api/common-fee`);
     console.log(`   - Import Wizard: /api/import`);
+    console.log(`   - Quality: /api/quality`);
   });
 }
 

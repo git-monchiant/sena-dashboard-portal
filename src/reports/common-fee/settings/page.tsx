@@ -192,11 +192,6 @@ export function SettingsPage() {
     }
   };
 
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return '-';
-    return dateStr;
-  };
-
   return (
     <div className="min-h-screen">
       <PageHeader

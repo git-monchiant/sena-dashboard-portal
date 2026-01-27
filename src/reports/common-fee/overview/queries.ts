@@ -65,12 +65,14 @@ export interface StatusDistribution {
 export interface TrendDataPoint {
   month: string;
   monthKey?: string;
+  month_key?: string;
   billed: number;
   paid: number;
   outstanding: number;
   cumBilled: number;
   cumPaid: number;
   cumOutstanding: number;
+  cumOutstandingYear?: number;
 }
 
 export interface RiskUnit {
@@ -127,17 +129,19 @@ export async function fetchCommonFeeOverview(
   if (filters.siteId) {
     params.set('site_id', filters.siteId);
   }
-  if (filters.year && filters.year !== 'all') {
+  // Use year filter
+  if (filters.year) {
     params.set('year', filters.year);
   }
-  if (filters.period) {
-    params.set('period', filters.period);
-  }
+
   if (filters.status && filters.status !== 'all') {
     params.set('status', filters.status);
   }
   if (filters.payGroup) {
     params.set('pay_group', filters.payGroup);
+  }
+  if (filters.projectType) {
+    params.set('project_type', filters.projectType);
   }
 
   // Fetch both overview and collection data in parallel
@@ -148,11 +152,15 @@ export async function fetchCommonFeeOverview(
   if (filters.siteId) {
     collectionParams.set('site_id', filters.siteId);
   }
-  if (filters.year && filters.year !== 'all') {
+  // Use year filter
+  if (filters.year) {
     collectionParams.set('year', filters.year);
   }
   if (filters.payGroup) {
     collectionParams.set('pay_group', filters.payGroup);
+  }
+  if (filters.projectType) {
+    collectionParams.set('project_type', filters.projectType);
   }
   collectionParams.set('limit', '1'); // แค่ต้องการ summary ไม่ต้องดึง data มาก
   const collectionUrl = `/api/common-fee/collection?${collectionParams}`;
@@ -176,7 +184,7 @@ export async function fetchCommonFeeOverview(
     paid: { count: 0, unitCount: 0, amount: 0 },
     partial: { count: 0, unitCount: 0, amount: 0 },
     active: { count: 0, unitCount: 0, amount: 0 },
-    overdue: { count: 0, unitCount: 0, amount: 0, yearlyCount: 0, yearlyUnitCount: 0, cumulativeAmount: 0, cumulativeCount: 0, cumulativeUnitCount: 0 },
+    overdue: { count: 0, unitCount: 0, amount: 0, yearlyCount: 0, yearlyUnitCount: 0, cumulativeAmount: 0, cumulativeCount: 0, cumulativeUnitCount: 0, totalUnitCount: 0 },
     void: { count: 0, unitCount: 0, amount: 0 },
     draft: { count: 0, unitCount: 0, amount: 0 },
   };
@@ -219,8 +227,12 @@ export async function fetchExpenseSummary(
   if (filters.siteId) {
     params.set('site_id', filters.siteId);
   }
-  if (filters.year && filters.year !== 'all') {
+  // Use year filter
+  if (filters.year) {
     params.set('year', filters.year);
+  }
+  if (filters.projectType) {
+    params.set('project_type', filters.projectType);
   }
 
   const url = `/api/common-fee/expense-summary${params.toString() ? `?${params}` : ''}`;
@@ -228,6 +240,105 @@ export async function fetchExpenseSummary(
 
   if (!response.ok) {
     throw new Error('Failed to fetch expense summary');
+  }
+
+  return response.json();
+}
+
+// Invoice Summary - ดึงตรงจาก table invoice
+export interface InvoiceSummaryData {
+  total: { count: number; unitCount: number; amount: number };
+  paid: { count: number; unitCount: number; amount: number };
+  partial: { count: number; unitCount: number; amount: number };
+  active: { count: number; unitCount: number; amount: number };
+  overdue: { count: number; unitCount: number; amount: number };
+  overdueCumulative: { count: number; unitCount: number; amount: number };
+  selectedYear: number;
+  void: { count: number; unitCount: number; amount: number };
+  draft: { count: number; unitCount: number; amount: number };
+}
+
+export async function fetchInvoiceSummary(
+  filters: SiteFilterValues
+): Promise<InvoiceSummaryData> {
+  const params = new URLSearchParams();
+  if (filters.siteId) {
+    params.set('site_id', filters.siteId);
+  }
+  // Use year filter
+  if (filters.year) {
+    params.set('year', filters.year);
+  }
+
+  if (filters.status && filters.status !== 'all') {
+    params.set('status', filters.status);
+  }
+  if (filters.payGroup) {
+    params.set('pay_group', filters.payGroup);
+  }
+  if (filters.projectType) {
+    params.set('project_type', filters.projectType);
+  }
+
+  const url = `/api/common-fee/invoice-summary${params.toString() ? `?${params}` : ''}`;
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch invoice summary');
+  }
+
+  return response.json();
+}
+
+// Collection by project - for comparison chart
+export interface YearlyBreakdownItem {
+  totalAmount: number;
+  paidAmount: number;
+  overdueAmount: number;
+}
+
+export interface ProjectCollectionData {
+  siteId: number;
+  name: string;
+  projectType: string;
+  isCondo: boolean;
+  totalAmount: number;
+  paidAmount: number;
+  overdueAmount: number;
+  totalUnits: number;
+  collectionRate: number;
+  ageYears: number;
+  ageMonths: number;
+  firstInvoiceDate?: string;
+  yearlyBreakdown?: Record<number, YearlyBreakdownItem>;
+  cumulative?: YearlyBreakdownItem;
+}
+
+export interface CollectionByProjectData {
+  year: number;
+  years?: number[];
+  projects: ProjectCollectionData[];
+}
+
+export async function fetchCollectionByProject(
+  filters: SiteFilterValues
+): Promise<CollectionByProjectData> {
+  const params = new URLSearchParams();
+  if (filters.year) {
+    params.set('year', filters.year);
+  }
+  if (filters.payGroup) {
+    params.set('pay_group', filters.payGroup);
+  }
+  if (filters.projectType) {
+    params.set('project_type', filters.projectType);
+  }
+
+  const url = `/api/common-fee/collection-by-project${params.toString() ? `?${params}` : ''}`;
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch collection by project');
   }
 
   return response.json();

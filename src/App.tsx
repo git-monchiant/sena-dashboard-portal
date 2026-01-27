@@ -1,30 +1,27 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@shared/auth';
-import { Layout, MainDashboardPage, CatalogPage } from '@portal/index';
+import { Layout, CatalogPage } from '@portal/index';
 import {
   SalesOverviewPage,
   SalesPipelinePage,
   TransferOverviewPage,
   TransferAgingPage,
-  CommonFeeOverviewPage,
-  CollectionDetailPage,
+  ProjectOverviewPage,
   AgingReportPage,
-  ExceptionPage,
   CommonFeeSettingsPage,
-  ERDiagramPage,
-  MaintenanceOverviewPage,
+  ProjectCollectionPage,
+  QualityOverviewPage,
   ByResponsiblePage,
-  MaintenanceAgingPage,
+  QualityAgingPage,
   ContractorPage,
-  MaintenanceExceptionPage,
-  MaintenanceSettingsPage,
-  MaintenanceRequestsPage,
+  QualityExceptionPage,
+  QualitySettingsPage,
+  QualityRequestsPage,
   SalesPerformance2025Page,
   ProjectDetailPage,
   EmployeeListPage,
   EmployeeDetailPage,
   MarketingPerformancePage,
-  VPDetailPage,
   PersonDetailPage,
   ExcelImportPage,
   MenuSettingsPage,
@@ -36,8 +33,8 @@ function App() {
       <Router>
         <Routes>
           <Route path="/" element={<Layout />}>
-            {/* Main Navigation */}
-            <Route index element={<MainDashboardPage />} />
+            {/* Main Navigation - Default to Common Fee */}
+            <Route index element={<Navigate to="/reports/common-fee" replace />} />
             <Route path="reports" element={<CatalogPage />} />
 
             {/* Sales Report 2025 Module */}
@@ -46,7 +43,6 @@ function App() {
             <Route path="sales-2025/project/:projectCode" element={<ProjectDetailPage />} />
             <Route path="sales-2025/employees" element={<EmployeeListPage />} />
             <Route path="sales-2025/employee/:name" element={<EmployeeDetailPage />} />
-            <Route path="sales-2025/vp/:name" element={<VPDetailPage />} />
             <Route path="sales-2025/person/:name" element={<PersonDetailPage />} />
 
             {/* Sales Module */}
@@ -62,21 +58,20 @@ function App() {
             <Route path="transfer/documents" element={<TransferOverviewPage />} />
 
             {/* Common Fee Module */}
-            <Route path="reports/common-fee" element={<CommonFeeOverviewPage />} />
-            <Route path="reports/common-fee/collection" element={<CollectionDetailPage />} />
+            <Route path="reports/common-fee" element={<ProjectCollectionPage />} />
+            <Route path="reports/common-fee/projects" element={<ProjectCollectionPage />} />
+            <Route path="reports/common-fee/overview" element={<ProjectOverviewPage />} />
             <Route path="reports/common-fee/aging" element={<AgingReportPage />} />
-            <Route path="reports/common-fee/exception" element={<ExceptionPage />} />
-            <Route path="reports/common-fee/er-diagram" element={<ERDiagramPage />} />
             <Route path="reports/common-fee/settings" element={<CommonFeeSettingsPage />} />
 
-            {/* Maintenance Module */}
-            <Route path="maintenance" element={<MaintenanceOverviewPage />} />
-            <Route path="maintenance/requests" element={<MaintenanceRequestsPage />} />
-            <Route path="maintenance/by-responsible" element={<ByResponsiblePage />} />
-            <Route path="maintenance/aging" element={<MaintenanceAgingPage />} />
-            <Route path="maintenance/contractor" element={<ContractorPage />} />
-            <Route path="maintenance/exception" element={<MaintenanceExceptionPage />} />
-            <Route path="maintenance/settings" element={<MaintenanceSettingsPage />} />
+            {/* Quality Report Module */}
+            <Route path="quality" element={<QualityOverviewPage />} />
+            <Route path="quality/requests" element={<QualityRequestsPage />} />
+            <Route path="quality/by-responsible" element={<ByResponsiblePage />} />
+            <Route path="quality/aging" element={<QualityAgingPage />} />
+            <Route path="quality/contractor" element={<ContractorPage />} />
+            <Route path="quality/exception" element={<QualityExceptionPage />} />
+            <Route path="quality/settings" element={<QualitySettingsPage />} />
 
             {/* Data Tools Module */}
             <Route path="data-tools/excel-import" element={<ExcelImportPage />} />

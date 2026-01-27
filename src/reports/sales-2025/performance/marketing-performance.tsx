@@ -52,6 +52,8 @@ interface ProjectRow {
   mkt_expense: number;
   total_lead: number;
   quality_lead: number;
+  walk: number;
+  book: number;
   booking: number;
   presale_livnex: number;
   revenue: number;
@@ -110,8 +112,8 @@ export function MarketingPerformancePage() {
 
       // Use the new v2 APIs - get both quarterly summary and marketing details
       const [summaryRes, marketingRes] = await Promise.all([
-        fetch(`http://localhost:3001/api/sales-2025-v2/summary?${params}`),
-        fetch(`http://localhost:3001/api/sales-2025-v2/marketing?${params}`)
+        fetch(`/api/sales-2025-v2/summary?${params}`),
+        fetch(`/api/sales-2025-v2/marketing?${params}`)
       ]);
       const summaryData = await summaryRes.json();
       const marketingData = await marketingRes.json();
@@ -196,6 +198,8 @@ export function MarketingPerformancePage() {
         mkt_expense: Number(p.mkt_expense || 0),
         total_lead: Number(p.total_lead || 0),
         quality_lead: Number(p.quality_lead || 0),
+        walk: Number(p.walk || 0),
+        book: Number(p.book || 0),
         booking: Number(p.booking || 0),
         presale_livnex: Number(p.presale_actual || 0),
         revenue: Number(p.revenue_actual || 0),
@@ -234,15 +238,15 @@ export function MarketingPerformancePage() {
   const totalPresaleLivnex = summary.reduce((acc, s) => acc + Number(s.total_presale_livnex || 0), 0);
   const totalRevenue = summary.reduce((acc, s) => acc + Number(s.total_revenue || 0), 0);
 
-  // Sum CPL/CPQL from all quarters (not average)
-  const cpl = summary.reduce((acc, s) => acc + Number(s.avg_cpl || 0), 0);
-  const cpql = summary.reduce((acc, s) => acc + Number(s.avg_cpql || 0), 0);
+  // Calculate CPL/CPQL/CPB from totals (not sum of quarterly values)
+  const cpl = totalLead > 0 ? totalMktExpense / totalLead : 0;
+  const cpql = totalQualityLead > 0 ? totalMktExpense / totalQualityLead : 0;
   const cpb = totalBook > 0 ? totalMktExpense / totalBook : 0;
 
-  // Sum MKT % from all quarters (not average)
-  const mktPctBooking = summary.reduce((acc, s) => acc + Number(s.avg_mkt_pct_booking || 0), 0) * 100;
+  // Calculate MKT % from totals (not sum of percentages)
+  const mktPctBooking = totalBooking > 0 ? (totalMktExpense / totalBooking) * 100 : 0;
   const mktPctPresale = totalPresaleLivnex > 0 ? (totalMktExpense / totalPresaleLivnex) * 100 : 0;
-  const mktPctRevenue = summary.reduce((acc, s) => acc + Number(s.avg_mkt_pct_revenue || 0), 0) * 100;
+  const mktPctRevenue = totalRevenue > 0 ? (totalMktExpense / totalRevenue) * 100 : 0;
 
   // Chart data for MKT Expense by Quarter
   const mktExpenseData = summary.map(s => ({
@@ -308,9 +312,6 @@ export function MarketingPerformancePage() {
           <KPICard
             title="MKT Expense (YTD)"
             value={formatCurrency(totalMktExpense)}
-            change="+฿0 จากเดือนก่อน"
-            changeType="neutral"
-            showArrow={false}
             subtext="ค่าใช้จ่าย Marketing"
             icon={DollarSign}
             color="orange"
@@ -318,9 +319,6 @@ export function MarketingPerformancePage() {
           <KPICard
             title="Total Lead"
             value={totalLead.toLocaleString()}
-            change="+0 จากเดือนก่อน"
-            changeType="neutral"
-            showArrow={false}
             subtext={`CPL: ฿${cpl.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
             icon={Users}
             color="purple"
@@ -328,9 +326,6 @@ export function MarketingPerformancePage() {
           <KPICard
             title="Quality Lead"
             value={totalQualityLead.toLocaleString()}
-            change="+0 จากเดือนก่อน"
-            changeType="neutral"
-            showArrow={false}
             subtext={`CPQL: ฿${cpql.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
             icon={Target}
             color="emerald"
@@ -338,9 +333,6 @@ export function MarketingPerformancePage() {
           <KPICard
             title="CPB (Cost/Book)"
             value={`฿${cpb.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
-            change="+฿0 จากเดือนก่อน"
-            changeType="neutral"
-            showArrow={false}
             subtext={`${totalBook.toLocaleString()} Bookings`}
             icon={BookCheck}
             color="blue"
@@ -348,9 +340,6 @@ export function MarketingPerformancePage() {
           <KPICard
             title="Lead Quality"
             value={`${totalLead > 0 ? ((totalQualityLead / totalLead) * 100).toFixed(1) : 0}%`}
-            change="+0% จากเดือนก่อน"
-            changeType="neutral"
-            showArrow={false}
             subtext={`${totalLead.toLocaleString()} Lead → ${totalQualityLead.toLocaleString()} QL`}
             icon={TrendingDown}
             color="slate"
@@ -695,11 +684,13 @@ export function MarketingPerformancePage() {
             proj.mkt_expense += Number(row.mkt_expense || 0);
             proj.total_lead += Number(row.total_lead || 0);
             proj.quality_lead += Number(row.quality_lead || 0);
+            proj.walk += Number(row.walk || 0);
+            proj.book += Number(row.book || 0);
             proj.presale_livnex += Number(row.presale_livnex || 0);
             proj.revenue += Number(row.revenue || 0);
           });
 
-          // Transform to Top10MarketingTable format
+          // Transform to Top10MarketingTable format - use actual walk/book values from API
           const tableProjects = Array.from(projectMap.values()).map(p => ({
             projectCode: p.project_code,
             projectName: p.project_name,
@@ -707,8 +698,8 @@ export function MarketingPerformancePage() {
               mktExpense: p.mkt_expense,
               totalLead: p.total_lead,
               qualityLead: p.quality_lead,
-              walk: totalWalk > 0 ? Math.round((p.quality_lead / totalQualityLead) * totalWalk) : 0,
-              book: totalBook > 0 ? Math.round((p.quality_lead / totalQualityLead) * totalBook) : 0,
+              walk: p.walk,
+              book: p.book,
               presaleActual: p.presale_livnex,
               revenueActual: p.revenue,
             },

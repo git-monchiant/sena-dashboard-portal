@@ -81,6 +81,12 @@ export async function fetchAgingData(filters: AgingFilters): Promise<AgingData> 
   if (filters.sortOrder) {
     params.set('sort_order', filters.sortOrder);
   }
+  if (filters.payGroup) {
+    params.set('pay_group', filters.payGroup);
+  }
+  if (filters.projectType) {
+    params.set('project_type', filters.projectType);
+  }
 
   const url = `/api/common-fee/aging${params.toString() ? `?${params}` : ''}`;
   const response = await fetch(url);

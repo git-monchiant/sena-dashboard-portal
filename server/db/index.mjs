@@ -39,6 +39,7 @@ export function getPool(database = 'RPT2025') {
 // Pre-configured pools for convenience
 export const pool = getPool('RPT2025');           // Sales 2025, Performance data
 export const silvermanPool = getPool('postgres'); // Common Fee (silverman schema)
+export const qualityPool = getPool('dbquality');  // Quality Reports (repair/complaint)
 
 // Test connection for a specific pool
 export async function testPoolConnection(poolInstance, name = 'default') {

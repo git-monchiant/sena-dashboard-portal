@@ -1,8 +1,6 @@
 // Common Fee Module Exports
 export * from './components';
 export * from './overview';
-export * from './collection';
 export * from './aging';
-export * from './exception';
 export * from './settings';
-export * from './er-diagram';
+export * from './projects';

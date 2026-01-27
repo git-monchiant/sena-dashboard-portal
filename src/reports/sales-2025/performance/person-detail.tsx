@@ -15,8 +15,20 @@ import {
   BookCheck,
   Building,
 } from 'lucide-react';
+import {
+  ComposedChart,
+  Line,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+  LabelList,
+} from 'recharts';
 
-const API_URL = 'http://localhost:3001';
+const API_URL = ''; // Use Vite proxy
 
 interface PersonData {
   name: string;
@@ -87,6 +99,23 @@ interface PersonData {
     salesManagers: { name: string; position: string; projects: { projectCode: string; projectName: string }[] }[];
     marketingManagers: { name: string; position: string; projects: { projectCode: string; projectName: string }[] }[];
   };
+  monthlyData?: {
+    month: string;
+    presaleTarget: number;
+    booking: number;
+    contract: number;
+    livnex: number;
+    livnexTarget: number;
+    revenueTarget: number;
+    revenue: number;
+    cancel: number;
+    // Marketing fields
+    mktExpense: number;
+    totalLead: number;
+    qualityLead: number;
+    walk: number;
+    book: number;
+  }[];
 }
 
 function formatNumber(num: number | string): string {
@@ -177,6 +206,7 @@ export function PersonDetailPage() {
               quarterlyPerformance: [],
               projects,
               team: undefined, // No team for managers
+              monthlyData: empData.monthlyData || [], // Include monthly data for charts
             });
           } else {
             throw new Error('Person not found');
@@ -356,6 +386,206 @@ export function PersonDetailPage() {
                   color="red"
                 />
               </div>
+            );
+          })()}
+
+          {/* Monthly Sales Charts - 4 graphs (only for Sales MGR, not Marketing) */}
+          {personData.department !== 'Mkt' && personData.monthlyData && personData.monthlyData.length > 0 && (() => {
+            const monthlyData = personData.monthlyData;
+
+            // Prepare chart data with calculated fields
+            const salesChartData = monthlyData.map((item) => {
+              const presaleTarget = item.presaleTarget || 0;
+              const booking = item.booking || 0;
+              const contract = item.contract || 0;
+              const livnex = item.livnex || 0;
+              const livnexTarget = item.livnexTarget || 0;
+              const revenueTarget = item.revenueTarget || 0;
+              const revenue = item.revenue || 0;
+              const cancel = item.cancel || 0;
+
+              return {
+                month: item.month,
+                'Booking Target': presaleTarget,
+                'Booking': booking,
+                'Contract': contract,
+                'Livnex': livnex,
+                'Livnex Target': livnexTarget,
+                'Revenue': revenue,
+                'Revenue Target': revenueTarget,
+                'Cancel': cancel,
+                'Booking %': presaleTarget > 0 ? ((booking / presaleTarget) * 100).toFixed(0) : '0',
+                'Contract %': presaleTarget > 0 ? ((contract / presaleTarget) * 100).toFixed(0) : '0',
+                'Livnex %': livnexTarget > 0 ? ((livnex / livnexTarget) * 100).toFixed(0) : '0',
+                'Revenue %': revenueTarget > 0 ? ((revenue / revenueTarget) * 100).toFixed(0) : '0',
+              };
+            });
+
+            // Calculate cumulative data
+            const cumulativeSalesData = salesChartData.reduce((acc: any[], item, index) => {
+              const prev = index > 0 ? acc[index - 1] : null;
+              acc.push({
+                month: item.month,
+                'Cum Booking': (prev?.['Cum Booking'] || 0) + (item['Booking'] || 0),
+                'Cum Contract': (prev?.['Cum Contract'] || 0) + (item['Contract'] || 0),
+                'Cum Cancel': (prev?.['Cum Cancel'] || 0) + (item['Cancel'] || 0),
+                'Cum Revenue': (prev?.['Cum Revenue'] || 0) + (item['Revenue'] || 0),
+                'Cum Livnex': (prev?.['Cum Livnex'] || 0) + (item['Livnex'] || 0),
+              });
+              return acc;
+            }, []);
+
+            return (
+              <>
+                {/* Row 1: Presale + Cancel */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+                  {/* Chart 1: Presale Performance */}
+                  <div className="card">
+                    <div className="mb-2">
+                      <h3 className="font-semibold text-slate-800">Presale Performance</h3>
+                      <p className="text-sm text-slate-500">Booking (แท่ง) & Contract (เส้น)</p>
+                    </div>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <ComposedChart data={salesChartData} margin={{ top: 20, right: 10, left: 10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="month" stroke="#64748b" fontSize={9} />
+                        <YAxis stroke="#64748b" fontSize={9} tickFormatter={(v) => `${(v / 1000000).toFixed(0)}M`} />
+                        <Tooltip formatter={(value: number, name: string) => [formatCurrency(value), name]} contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '11px' }} />
+                        <Legend content={() => (
+                          <div className="flex justify-start gap-3 pt-2 flex-wrap">
+                            <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#94a3b8' }} /><span className="text-[10px] text-slate-600">Target</span></div>
+                            <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#8b5cf6' }} /><span className="text-[10px] text-slate-600">Booking</span></div>
+                            <div className="flex items-center gap-1"><div className="w-3 h-0.5 rounded" style={{ backgroundColor: '#10b981' }} /><span className="text-[10px] text-slate-600">Contract</span></div>
+                          </div>
+                        )} />
+                        <Bar dataKey="Booking Target" fill="#94a3b8" radius={[2, 2, 0, 0]}>
+                          <LabelList position="top" fontSize={7} fill="#64748b" formatter={(v: number) => v > 0 ? `${(v / 1000000).toFixed(0)}M` : ''} />
+                        </Bar>
+                        <Bar dataKey="Booking" fill="#8b5cf6" radius={[2, 2, 0, 0]}>
+                          <LabelList position="top" fontSize={7} fill="#8b5cf6" content={({ x, y, width, value, index }: any) => {
+                            if (!value || value <= 0) return null;
+                            const pct = salesChartData[index]?.['Booking %'] || '0';
+                            return <text x={x + width / 2} y={y - 4} textAnchor="middle" fontSize={7} fill="#8b5cf6">{`${(value / 1000000).toFixed(0)}M (${pct}%)`}</text>;
+                          }} />
+                        </Bar>
+                        <Line type="monotone" dataKey="Contract" stroke="#10b981" strokeWidth={2} dot={{ fill: '#10b981', r: 3 }}>
+                          <LabelList position="top" fontSize={7} fill="#10b981" content={({ x, y, value, index }: any) => {
+                            if (!value || value <= 0) return null;
+                            const pct = salesChartData[index]?.['Contract %'] || '0';
+                            return <text x={x} y={y - 8} textAnchor="middle" fontSize={7} fill="#10b981">{`${(value / 1000000).toFixed(0)}M (${pct}%)`}</text>;
+                          }} />
+                        </Line>
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Chart 2: Cancel */}
+                  <div className="card">
+                    <div className="mb-2">
+                      <h3 className="font-semibold text-slate-800">Cancel</h3>
+                      <p className="text-sm text-slate-500">แท่ง = รายเดือน, เส้น = สะสม</p>
+                    </div>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <ComposedChart data={salesChartData.map((item, idx) => ({ ...item, 'Cum Cancel': cumulativeSalesData[idx]?.['Cum Cancel'] || 0 }))} margin={{ top: 20, right: 10, left: 10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="month" stroke="#64748b" fontSize={9} />
+                        <YAxis yAxisId="left" stroke="#64748b" fontSize={9} tickFormatter={(v) => `${(v / 1000000).toFixed(0)}M`} />
+                        <YAxis yAxisId="right" orientation="right" stroke="#b91c1c" fontSize={9} tickFormatter={(v) => `${(v / 1000000).toFixed(0)}M`} />
+                        <Tooltip formatter={(value: number, name: string) => [formatCurrency(value), name === 'Cum Cancel' ? 'สะสม' : 'รายเดือน']} contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '11px' }} />
+                        <Legend content={() => (
+                          <div className="flex justify-start gap-3 pt-2">
+                            <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#ef4444' }} /><span className="text-[10px] text-slate-600">รายเดือน</span></div>
+                            <div className="flex items-center gap-1"><div className="w-3 h-0.5 rounded" style={{ backgroundColor: '#b91c1c' }} /><span className="text-[10px] text-slate-600">สะสม</span></div>
+                          </div>
+                        )} />
+                        <Bar yAxisId="left" dataKey="Cancel" fill="#ef4444" radius={[2, 2, 0, 0]}>
+                          <LabelList position="top" fontSize={7} fill="#ef4444" formatter={(v: number) => v > 0 ? `${(v / 1000000).toFixed(0)}M` : ''} />
+                        </Bar>
+                        <Line yAxisId="right" type="monotone" dataKey="Cum Cancel" stroke="#b91c1c" strokeWidth={2} dot={{ fill: '#b91c1c', r: 3 }}>
+                          <LabelList position="top" fontSize={7} fill="#b91c1c" formatter={(v: number) => v > 0 ? `${(v / 1000000).toFixed(0)}M` : ''} />
+                        </Line>
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Row 2: Transfer + LivNex */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+                  {/* Chart 3: Transfer Performance */}
+                  <div className="card">
+                    <div className="mb-2">
+                      <h3 className="font-semibold text-slate-800">Transfer Performance</h3>
+                      <p className="text-sm text-slate-500">แท่ง = รายเดือน, เส้น = สะสม</p>
+                    </div>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <ComposedChart data={salesChartData.map((item, idx) => ({ ...item, 'Cum Revenue': cumulativeSalesData[idx]?.['Cum Revenue'] || 0 }))} margin={{ top: 20, right: 10, left: 10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="month" stroke="#64748b" fontSize={9} />
+                        <YAxis yAxisId="left" stroke="#64748b" fontSize={9} tickFormatter={(v) => `${(v / 1000000).toFixed(0)}M`} />
+                        <YAxis yAxisId="right" orientation="right" stroke="#1d4ed8" fontSize={9} tickFormatter={(v) => `${(v / 1000000).toFixed(0)}M`} />
+                        <Tooltip formatter={(value: number, name: string) => [formatCurrency(value), name === 'Cum Revenue' ? 'สะสม' : name]} contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '11px' }} />
+                        <Legend content={() => (
+                          <div className="flex justify-start gap-3 pt-2 flex-wrap">
+                            <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#cbd5e1' }} /><span className="text-[10px] text-slate-600">Target</span></div>
+                            <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#3b82f6' }} /><span className="text-[10px] text-slate-600">Revenue</span></div>
+                            <div className="flex items-center gap-1"><div className="w-2.5 h-1 rounded-full" style={{ backgroundColor: '#1d4ed8' }} /><span className="text-[10px] text-slate-600">สะสม</span></div>
+                          </div>
+                        )} />
+                        <Bar yAxisId="left" dataKey="Revenue Target" fill="#cbd5e1" radius={[2, 2, 0, 0]}>
+                          <LabelList position="top" fontSize={7} fill="#64748b" formatter={(v: number) => v > 0 ? `${(v / 1000000).toFixed(0)}M` : ''} />
+                        </Bar>
+                        <Bar yAxisId="left" dataKey="Revenue" fill="#3b82f6" radius={[2, 2, 0, 0]}>
+                          <LabelList position="top" fontSize={7} fill="#3b82f6" content={({ x, y, width, value, index }: any) => {
+                            if (!value || value <= 0) return null;
+                            const pct = salesChartData[index]?.['Revenue %'] || '0';
+                            return <text x={x + width / 2} y={y - 4} textAnchor="middle" fontSize={7} fill="#3b82f6">{`${(value / 1000000).toFixed(0)}M (${pct}%)`}</text>;
+                          }} />
+                        </Bar>
+                        <Line yAxisId="right" type="monotone" dataKey="Cum Revenue" stroke="#1d4ed8" strokeWidth={2} dot={{ fill: '#1d4ed8', r: 3 }}>
+                          <LabelList position="top" fontSize={7} fill="#1d4ed8" formatter={(v: number) => v > 0 ? `${(v / 1000000).toFixed(0)}M` : ''} />
+                        </Line>
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Chart 4: LivNex Performance */}
+                  <div className="card">
+                    <div className="mb-2">
+                      <h3 className="font-semibold text-slate-800">LivNex Performance</h3>
+                      <p className="text-sm text-slate-500">แท่ง = รายเดือน, เส้น = สะสม</p>
+                    </div>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <ComposedChart data={salesChartData.map((item, idx) => ({ ...item, 'Cum Livnex': cumulativeSalesData[idx]?.['Cum Livnex'] || 0 }))} margin={{ top: 20, right: 10, left: 10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="month" stroke="#64748b" fontSize={9} />
+                        <YAxis yAxisId="left" stroke="#64748b" fontSize={9} tickFormatter={(v) => `${(v / 1000000).toFixed(0)}M`} />
+                        <YAxis yAxisId="right" orientation="right" stroke="#c2410c" fontSize={9} tickFormatter={(v) => `${(v / 1000000).toFixed(0)}M`} />
+                        <Tooltip formatter={(value: number, name: string) => [formatCurrency(value), name === 'Cum Livnex' ? 'สะสม' : name]} contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '11px' }} />
+                        <Legend content={() => (
+                          <div className="flex justify-start gap-3 pt-2 flex-wrap">
+                            <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#fed7aa' }} /><span className="text-[10px] text-slate-600">Target</span></div>
+                            <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: '#f97316' }} /><span className="text-[10px] text-slate-600">Livnex</span></div>
+                            <div className="flex items-center gap-1"><div className="w-2.5 h-1 rounded-full" style={{ backgroundColor: '#c2410c' }} /><span className="text-[10px] text-slate-600">สะสม</span></div>
+                          </div>
+                        )} />
+                        <Bar yAxisId="left" dataKey="Livnex Target" fill="#fed7aa" radius={[2, 2, 0, 0]}>
+                          <LabelList position="top" fontSize={7} fill="#64748b" formatter={(v: number) => v > 0 ? `${(v / 1000000).toFixed(0)}M` : ''} />
+                        </Bar>
+                        <Bar yAxisId="left" dataKey="Livnex" fill="#f97316" radius={[2, 2, 0, 0]}>
+                          <LabelList position="top" fontSize={7} fill="#f97316" content={({ x, y, width, value, index }: any) => {
+                            if (!value || value <= 0) return null;
+                            const pct = salesChartData[index]?.['Livnex %'] || '0';
+                            return <text x={x + width / 2} y={y - 4} textAnchor="middle" fontSize={7} fill="#f97316">{`${(value / 1000000).toFixed(0)}M (${pct}%)`}</text>;
+                          }} />
+                        </Bar>
+                        <Line yAxisId="right" type="monotone" dataKey="Cum Livnex" stroke="#c2410c" strokeWidth={2} dot={{ fill: '#c2410c', r: 3 }}>
+                          <LabelList position="top" fontSize={7} fill="#c2410c" formatter={(v: number) => v > 0 ? `${(v / 1000000).toFixed(0)}M` : ''} />
+                        </Line>
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </>
             );
           })()}
 

@@ -8,7 +8,7 @@ export default defineConfig({
     port: 3000,
     strictPort: true, // Fail if port 3000 is not available
     host: true,
-    allowedHosts: ['upon-requires-normally-total.trycloudflare.com'],
+    allowedHosts: true, // Allow all hosts for Cloudflare tunnel
     proxy: {
       '/api': {
         target: 'http://localhost:3001',
