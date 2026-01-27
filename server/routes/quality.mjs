@@ -22,7 +22,7 @@ const CATEGORY_GROUP_MAP = {
   'เฟอร์นิเจอร์': ['เฟอร์นิเจอร์', 'โซฟา'],
   'รั้ว/กำแพง': ['รั้ว/กำแพง'],
   'เครื่องปรับอากาศ': ['เครื่องปรับอากาศ'],
-  'โซล่า': ['Inverter', 'แผงโซล่าเซล'],
+  'โซล่าเซลล์': ['Inverter', 'แผงโซล่าเซล'],
   'งานติดตั้ง': ['งานติดตั้ง', 'อุปกรณ์เครื่องใช้ภายในบ้าน'],
   'สระว่ายน้ำ': ['สระว่ายน้ำ'],
   'ลิฟต์': ['ลิฟต์'],
@@ -132,16 +132,16 @@ router.get('/overview', async (req, res, next) => {
         ORDER BY month
       `, trendParams),
 
-      // 3. Open jobs by repair_category
+      // 3. Jobs by repair_category (total + open)
       qualityPool.query(`
         SELECT
           repair_category AS category,
-          COUNT(*) AS open_jobs
+          COUNT(*) AS total_jobs,
+          COUNT(*) FILTER (WHERE job_sub_status NOT IN ('completed', 'cancel')) AS open_jobs
         FROM trn_repair
         ${whereClause}
-        ${whereClause ? 'AND' : 'WHERE'} job_sub_status NOT IN ('completed', 'cancel')
         GROUP BY repair_category
-        ORDER BY open_jobs DESC
+        ORDER BY total_jobs DESC
       `, params),
 
       // 4. Project defects summary
@@ -258,7 +258,7 @@ router.get('/overview', async (req, res, next) => {
       'เฟอร์นิเจอร์': '#d946ef',
       'รั้ว/กำแพง': '#737373',
       'เครื่องปรับอากาศ': '#06b6d4',
-      'โซล่า': '#f97316',
+      'โซล่าเซลล์': '#f97316',
       'งานติดตั้ง': '#84cc16',
       'สระว่ายน้ำ': '#0ea5e9',
       'ลิฟต์': '#a855f7',
@@ -267,21 +267,23 @@ router.get('/overview', async (req, res, next) => {
     };
     const defaultColors = ['#10b981', '#f97316', '#a855f7', '#84cc16', '#22c55e', '#9ca3af', '#ec4899', '#0ea5e9'];
     const groupTotals = {};
+    const groupOpen = {};
     for (const r of categoryResult.rows) {
       const group = getCategoryGroup(r.category);
-      groupTotals[group] = (groupTotals[group] || 0) + parseInt(r.open_jobs);
+      groupTotals[group] = (groupTotals[group] || 0) + parseInt(r.total_jobs);
+      groupOpen[group] = (groupOpen[group] || 0) + parseInt(r.open_jobs);
     }
     let colorIdx = 0;
-    const openJobsByCategory = Object.entries(groupTotals).map(([group, openJobs]) => ({
+    const openJobsByCategory = Object.entries(groupTotals).map(([group, totalJobs]) => ({
       category: group,
       label: group,
-      openJobs,
+      totalJobs,
+      openJobs: groupOpen[group] || 0,
       color: groupColorMap[group] || defaultColors[colorIdx++ % defaultColors.length],
     })).sort((a, b) => {
-      // อื่นๆ always last
       if (a.category === 'อื่นๆ') return 1;
       if (b.category === 'อื่นๆ') return -1;
-      return b.openJobs - a.openJobs;
+      return b.totalJobs - a.totalJobs;
     });
 
     // Process project defects

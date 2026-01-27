@@ -233,7 +233,7 @@ export function QualityOverviewPage() {
       if (result.openJobsByCategory.length > 0) {
         const sorted = [...result.openJobsByCategory]
           .filter(d => d.category !== 'ไม่ระบุ')
-          .sort((a, b) => b.openJobs - a.openJobs);
+          .sort((a, b) => b.totalJobs - a.totalJobs);
         if (sorted.length > 0) {
           const first = sorted[0].category;
           setSelectedCategory(first);
@@ -757,13 +757,13 @@ export function QualityOverviewPage() {
         <div className="card mb-8">
           <div className="mb-4">
             <h3 className="font-semibold text-slate-800">Top 20 งานซ่อมตามหมวดงาน</h3>
-            <p className="text-sm text-slate-500">จำนวนงานเปิดอยู่แยกตาม repair_category (สูงสุด 20 อันดับ)</p>
+            <p className="text-sm text-slate-500">จำนวนงานทั้งหมดแยกตาม repair_category (สูงสุด 20 อันดับ)</p>
           </div>
           {/* Clickable category chips */}
           <div className="flex flex-wrap gap-2 mb-3">
             {(() => {
-              const named = data.openJobsByCategory.filter(d => d.category !== 'ไม่ระบุ');
-              const sorted = [...named].sort((a, b) => b.openJobs - a.openJobs);
+              const named = data.openJobsByCategory.filter(d => d.category !== 'ไม่ระบุ' && d.category !== 'อื่นๆ');
+              const sorted = [...named].sort((a, b) => b.totalJobs - a.totalJobs);
               return sorted.slice(0, 20).map((item) => (
                 <button
                   key={item.category}
@@ -774,7 +774,7 @@ export function QualityOverviewPage() {
                       : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                   }`}
                 >
-                  {item.label} ({item.openJobs.toLocaleString()})
+                  {item.label} ({item.totalJobs.toLocaleString()})
                 </button>
               ));
             })()}
@@ -783,14 +783,15 @@ export function QualityOverviewPage() {
           <ResponsiveContainer width="100%" height={300}>
             <BarChart
               data={(() => {
-                const named = data.openJobsByCategory.filter(d => d.category !== 'ไม่ระบุ');
-                const unnamed = data.openJobsByCategory.filter(d => d.category === 'ไม่ระบุ');
-                const sorted = [...named].sort((a, b) => b.openJobs - a.openJobs);
+                const named = data.openJobsByCategory.filter(d => d.category !== 'ไม่ระบุ' && d.category !== 'อื่นๆ');
+                const unnamed = data.openJobsByCategory.filter(d => d.category === 'ไม่ระบุ' || d.category === 'อื่นๆ');
+                const sorted = [...named].sort((a, b) => b.totalJobs - a.totalJobs);
                 const top20 = sorted.slice(0, 20);
                 const rest = sorted.slice(20);
-                const othersTotal = rest.reduce((s, d) => s + d.openJobs, 0) + unnamed.reduce((s, d) => s + d.openJobs, 0);
-                if (othersTotal > 0) {
-                  top20.push({ category: 'อื่นๆ', label: 'อื่นๆ', openJobs: othersTotal, color: '#9ca3af' });
+                const othersTotalJobs = rest.reduce((s, d) => s + d.totalJobs, 0) + unnamed.reduce((s, d) => s + d.totalJobs, 0);
+                const othersOpenJobs = rest.reduce((s, d) => s + d.openJobs, 0) + unnamed.reduce((s, d) => s + d.openJobs, 0);
+                if (othersTotalJobs > 0) {
+                  top20.push({ category: 'อื่นๆ', label: 'อื่นๆ', totalJobs: othersTotalJobs, openJobs: othersOpenJobs, color: '#9ca3af' });
                 }
                 return top20;
               })()}
@@ -812,14 +813,14 @@ export function QualityOverviewPage() {
                 height={80}
                 tick={({ x, y, payload }: any) => {
                   const cat = (() => {
-                    const named = data.openJobsByCategory.filter(d => d.category !== 'ไม่ระบุ');
-                    const sorted = [...named].sort((a, b) => b.openJobs - a.openJobs);
+                    const named = data.openJobsByCategory.filter(d => d.category !== 'ไม่ระบุ' && d.category !== 'อื่นๆ');
+                    const sorted = [...named].sort((a, b) => b.totalJobs - a.totalJobs);
                     const top20 = sorted.slice(0, 20);
                     const rest = sorted.slice(20);
-                    const unnamed = data.openJobsByCategory.filter(d => d.category === 'ไม่ระบุ');
-                    const othersTotal = rest.reduce((s, d) => s + d.openJobs, 0) + unnamed.reduce((s, d) => s + d.openJobs, 0);
+                    const unnamed = data.openJobsByCategory.filter(d => d.category === 'ไม่ระบุ' || d.category === 'อื่นๆ');
+                    const othersTotalJobs = rest.reduce((s, d) => s + d.totalJobs, 0) + unnamed.reduce((s, d) => s + d.totalJobs, 0);
                     const all = [...top20];
-                    if (othersTotal > 0) all.push({ category: 'อื่นๆ', label: 'อื่นๆ', openJobs: othersTotal, color: '#9ca3af' });
+                    if (othersTotalJobs > 0) all.push({ category: 'อื่นๆ', label: 'อื่นๆ', totalJobs: othersTotalJobs, openJobs: 0, color: '#9ca3af' });
                     return all.find(d => d.label === payload.value)?.category;
                   })();
                   const isSelected = selectedCategory === cat;
@@ -852,13 +853,14 @@ export function QualityOverviewPage() {
                         <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
                         <span className="text-sm font-medium text-slate-700">{item.label}</span>
                       </div>
-                      <p className="text-sm text-slate-800 mt-1">{item.openJobs.toLocaleString()} งาน</p>
+                      <p className="text-sm text-slate-800 mt-1">ทั้งหมด: {item.totalJobs.toLocaleString()} งาน</p>
+                      <p className="text-sm text-amber-600">เปิดอยู่: {item.openJobs.toLocaleString()} งาน</p>
                     </div>
                   );
                 }}
               />
               <Bar
-                dataKey="openJobs"
+                dataKey="totalJobs"
                 cursor="pointer"
                 onClick={(entry: any) => handleCategoryClick(entry.category)}
                 shape={(props: any) => {
@@ -874,27 +876,27 @@ export function QualityOverviewPage() {
                 }}
               >
                 {(() => {
-                  const named = data.openJobsByCategory.filter(d => d.category !== 'ไม่ระบุ');
-                  const unnamed = data.openJobsByCategory.filter(d => d.category === 'ไม่ระบุ');
-                  const sorted = [...named].sort((a, b) => b.openJobs - a.openJobs);
+                  const named = data.openJobsByCategory.filter(d => d.category !== 'ไม่ระบุ' && d.category !== 'อื่นๆ');
+                  const unnamed = data.openJobsByCategory.filter(d => d.category === 'ไม่ระบุ' || d.category === 'อื่นๆ');
+                  const sorted = [...named].sort((a, b) => b.totalJobs - a.totalJobs);
                   const top20 = sorted.slice(0, 20);
                   const rest = sorted.slice(20);
-                  const othersTotal = rest.reduce((s, d) => s + d.openJobs, 0) + unnamed.reduce((s, d) => s + d.openJobs, 0);
+                  const othersTotalJobs = rest.reduce((s, d) => s + d.totalJobs, 0) + unnamed.reduce((s, d) => s + d.totalJobs, 0);
                   const colors = top20.map((e, i) => ({
                     color: e.color,
                     selected: selectedCategory === e.category,
                   }));
-                  if (othersTotal > 0) colors.push({ color: '#9ca3af', selected: false });
+                  if (othersTotalJobs > 0) colors.push({ color: '#9ca3af', selected: false });
                   return colors.map((c, i) => <Cell key={`cell-${i}`} fill={c.color} opacity={selectedCategory && !c.selected ? 0.4 : 1} />);
                 })()}
                 <LabelList
-                  dataKey="openJobs"
+                  dataKey="totalJobs"
                   position="top"
                   fontSize={11}
                   fill="#64748b"
                   fontWeight={600}
                   formatter={(v: number) => {
-                    const total = data.openJobsByCategory.reduce((s, d) => s + d.openJobs, 0);
+                    const total = data.openJobsByCategory.reduce((s, d) => s + d.totalJobs, 0);
                     const pct = total > 0 ? ((v / total) * 100).toFixed(1) : '0';
                     return `${v.toLocaleString()} (${pct}%)`;
                   }}
@@ -936,11 +938,11 @@ export function QualityOverviewPage() {
                       }
                       return months;
                     })()}
-                    margin={{ top: 10, right: 10, left: 10, bottom: 5 }}
+                    margin={{ top: 20, right: 10, left: 10, bottom: 5 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis dataKey="month" stroke="#64748b" fontSize={11} />
-                    <YAxis stroke="#64748b" fontSize={12} />
+                    <YAxis stroke="#64748b" fontSize={12} allowDecimals={false} />
                     <Tooltip
                       content={({ active, payload, label }) => {
                         if (!active || !payload?.length) return null;
@@ -956,7 +958,7 @@ export function QualityOverviewPage() {
                       }}
                     />
                     <Bar dataKey="total" fill="#3b82f6" radius={[4, 4, 0, 0]} name="งานทั้งหมด">
-                      <LabelList dataKey="total" position="top" fontSize={10} fill="#64748b" formatter={(v: number) => v > 0 ? v.toLocaleString() : ''} />
+                      <LabelList dataKey="total" position="top" fontSize={10} fill="#64748b" offset={10} formatter={(v: any) => v > 0 ? Number(v).toLocaleString() : ''} />
                     </Bar>
                     <Line type="monotone" dataKey="completed" stroke="#22c55e" strokeWidth={2} dot={{ r: 3, fill: '#22c55e' }} name="ปิดแล้ว" />
                     <Line type="monotone" dataKey="openJobs" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3, fill: '#f59e0b' }} name="ยังเปิด" />

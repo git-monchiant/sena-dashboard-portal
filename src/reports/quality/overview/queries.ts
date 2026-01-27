@@ -23,6 +23,7 @@ export interface TrendDataPoint {
 export interface OpenJobsByCategory {
   category: string;
   label: string;
+  totalJobs: number;
   openJobs: number;
   color: string;
 }
