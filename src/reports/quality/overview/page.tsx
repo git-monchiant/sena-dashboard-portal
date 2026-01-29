@@ -382,7 +382,7 @@ export function QualityOverviewPage() {
         {/* 3 Pies + Trend Chart in one row */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-8">
           {/* All 3 Pie Charts stacked */}
-          <div className="card p-3 flex flex-col justify-between" style={{ minHeight: 0 }}>
+          <div className="card p-3 flex flex-col justify-start lg:row-span-2" style={{ minHeight: 0 }}>
             {/* Status Distribution Pie */}
             <div className="flex-1 min-h-0">
               <h3 className="font-semibold text-slate-800 text-xs mb-0">สถานะงาน <span className="font-normal text-slate-400">({groupedStatusPieData.reduce((s, d) => s + (d.value as number), 0).toLocaleString()} งาน, {data.kpis.distinctUnits?.toLocaleString() ?? 0} ยูนิต)</span></h3>
@@ -544,6 +544,50 @@ export function QualityOverviewPage() {
               })()}
             </div>
 
+            <hr className="border-slate-100" />
+
+            {/* Work Area Pie */}
+            <div className="flex-1 min-h-0">
+              {(() => {
+                const waLabels: Record<string, string> = { customer_room: 'ห้องลูกค้า', sales_office: 'สนง.ขาย', central_area: 'ซ่อมส่วนกลาง' };
+                const waColors: Record<string, string> = { customer_room: '#3b82f6', sales_office: '#f59e0b', central_area: '#8b5cf6' };
+                const waData = (data.workAreaBreakdown || []).map(w => ({ name: waLabels[w.workArea] || w.workArea, value: w.total, color: waColors[w.workArea] || '#9ca3af' })).sort((a, b) => b.value - a.value);
+                const waTotal = waData.reduce((s, d) => s + d.value, 0);
+                return (
+                  <>
+                    <h3 className="font-semibold text-slate-800 text-xs mb-0">ประเภทพื้นที่ <span className="font-normal text-slate-400">({waTotal.toLocaleString()} งาน)</span></h3>
+                    <div className="flex items-center gap-3" style={{ height: 90 }}>
+                      <div style={{ width: 90, minWidth: 90, height: 90 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie data={waData} cx="50%" cy="50%" innerRadius={18} outerRadius={38} paddingAngle={2} dataKey="value">
+                              {waData.map((entry, i) => <Cell key={`wa-${i}`} fill={entry.color} />)}
+                            </Pie>
+                            <Tooltip content={({ active, payload }) => {
+                              if (!active || !payload?.length) return null;
+                              const d = payload[0].payload;
+                              return (
+                                <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-lg">
+                                  <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: d.color }} /><span className="text-sm text-slate-700">{d.name}</span></div>
+                                  <p className="text-sm font-semibold text-slate-800 mt-1">{d.value.toLocaleString()} งาน</p>
+                                </div>
+                              );
+                            }} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div style={{ fontSize: 10, lineHeight: '16px' }}>
+                        {waData.map((item, i) => {
+                          const pct = waTotal > 0 ? ((item.value / waTotal) * 100).toFixed(0) : 0;
+                          return (<div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, backgroundColor: item.color, flexShrink: 0 }} /><span>{item.name} {item.value.toLocaleString()} ({pct}%)</span></div>);
+                        })}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+
           </div>
 
           {/* Trend Chart - Stacked Bar + Cumulative Backlog Line */}
@@ -554,7 +598,7 @@ export function QualityOverviewPage() {
                 <p className="text-sm text-slate-500">Grouped bar: งานเปิด vs งานปิด + เส้นคงค้างสะสม (13 เดือนล่าสุด)</p>
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={350}>
+            <ResponsiveContainer width="100%" height={250}>
               <ComposedChart
                 data={(() => {
                   // Generate last 13 months
@@ -714,6 +758,86 @@ export function QualityOverviewPage() {
                 <div className="w-3 h-0.5 bg-red-500 rounded" />
                 <span className="text-sm text-slate-600">คงค้างสะสม</span>
               </div>
+            </div>
+          </div>
+
+          {/* Work Area Monthly Trend - 3 charts, same width as trend chart */}
+          <div className="card lg:col-span-4 lg:col-start-2">
+            <div className="mb-4">
+              <h3 className="font-semibold text-slate-800">งานแยกตามประเภทพื้นที่ รายเดือน</h3>
+              <p className="text-sm text-slate-500">เปิด / ปิด / ค้างสะสม (12 เดือนล่าสุด)</p>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {([
+                { key: 'customer_room', label: 'ห้องลูกค้า', color: '#3b82f6' },
+                { key: 'central_area', label: 'ซ่อมส่วนกลาง', color: '#8b5cf6' },
+                { key: 'sales_office', label: 'สนง.ขาย', color: '#f59e0b' },
+              ] as const).map(({ key, label, color }) => {
+                const thaiMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+                const now = new Date();
+
+                // Build display labels (12 months)
+                const displayLabels = new Set<string>();
+                for (let i = 11; i >= 0; i--) {
+                  const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                  displayLabels.add(thaiMonths[d.getMonth()] + ' ' + String(d.getFullYear()).slice(2));
+                }
+
+                // Initial backlog = nullDateOpenJobs for this work_area + pre-display-range accumulation
+                let cumOpen = (data.workAreaNullDateOpen || {})[key] || 0;
+                for (const t of (data.workAreaTrend || [])) {
+                  if (!displayLabels.has(t.month as string)) {
+                    const opened = Number(t[key + '_opened'] || 0);
+                    const completed = Number(t[key + '_completed'] || 0);
+                    cumOpen += opened - completed;
+                  }
+                }
+
+                const chartData: { month: string; closed: number; open: number; total: number; backlog: number }[] = [];
+                for (let i = 11; i >= 0; i--) {
+                  const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                  const ml = thaiMonths[d.getMonth()] + ' ' + String(d.getFullYear()).slice(2);
+                  const found = (data.workAreaTrend || []).find(t => t.month === ml);
+                  const opened = Number(found?.[key + '_opened'] || 0);
+                  const closed = Number(found?.[key + '_closed'] || 0);
+                  const completed = Number(found?.[key + '_completed'] || 0);
+                  cumOpen += opened - completed;
+                  chartData.push({ month: ml, closed, open: opened, total: closed + opened, backlog: cumOpen });
+                }
+                return (
+                  <div key={key}>
+                    <h4 className="text-sm font-semibold mb-2" style={{ color }}>{label}</h4>
+                    <ResponsiveContainer width="100%" height={150}>
+                      <ComposedChart data={chartData} margin={{ top: 20, right: 5, left: -10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="month" tick={{ fontSize: 9 }} interval={1} />
+                        <YAxis yAxisId="left" tick={{ fontSize: 9 }} />
+                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9 }} />
+                        <Tooltip formatter={(value: any, name: any) => {
+                          const n: Record<string, string> = { open: 'เปิดใหม่', closed: 'ปิดแล้ว', backlog: 'ค้างสะสม' };
+                          return [Number(value).toLocaleString(), n[name] || name];
+                        }} />
+                        <Bar dataKey="open" yAxisId="left" fill="#3b82f6" name="open">
+                          <LabelList dataKey="open" position="top" style={{ fontSize: 8, fill: '#3b82f6' }} formatter={(v: any) => Number(v) > 0 ? Number(v).toLocaleString() : ''} />
+                        </Bar>
+                        <Bar dataKey="closed" yAxisId="left" fill="#10b981" name="closed">
+                          <LabelList dataKey="closed" position="top" style={{ fontSize: 8, fill: '#10b981' }} formatter={(v: any) => Number(v) > 0 ? Number(v).toLocaleString() : ''} />
+                        </Bar>
+                        <Line type="linear" dataKey="backlog" yAxisId="right" stroke="#ef4444" strokeWidth={2} dot={{ r: 2 }} name="backlog"
+                          label={({ x, y, value, index }: any) => {
+                            if (index !== 0 && index !== chartData.length - 1) return null;
+                            return <text x={x} y={y - 8} textAnchor="middle" fontSize={9} fill="#ef4444" fontWeight={600}>{Number(value).toLocaleString()}</text>;
+                          }} />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex justify-center gap-6 mt-3">
+              <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded" style={{ backgroundColor: '#3b82f6' }} /><span className="text-xs text-slate-600">เปิดใหม่</span></div>
+              <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded" style={{ backgroundColor: '#10b981' }} /><span className="text-xs text-slate-600">ปิดแล้ว</span></div>
+              <div className="flex items-center gap-1.5"><div className="w-3 h-0.5 bg-red-500 rounded" /><span className="text-xs text-slate-600">ค้างสะสม</span></div>
             </div>
           </div>
         </div>
@@ -966,6 +1090,7 @@ export function QualityOverviewPage() {
             </div>
           )}
         </div>
+
 
         {/* Monthly SLA Breakdown Table */}
         <div className="card mb-8">

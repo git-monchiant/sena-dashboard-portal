@@ -287,6 +287,10 @@ router.get('/overview', async (req, res, next) => {
       agingScatterOpenResult,
       agingScatterClosedResult,
       workAreaResult,
+      workAreaOpenedResult,
+      workAreaClosedResult,
+      workAreaNullDateResult,
+      workAreaCompletedResult,
     ] = await Promise.all([
       // 1. KPIs
       qualityPool.query(`
@@ -540,6 +544,50 @@ router.get('/overview', async (req, res, next) => {
         ${whereClause}
         GROUP BY 1
       `, params),
+
+      // 18a. Work area opened by open_date (no date filter)
+      qualityPool.query(`
+        SELECT TO_CHAR(open_date, 'YYYY-MM') AS month,
+          COALESCE(work_area, 'customer_room') AS work_area,
+          COUNT(*) AS opened
+        FROM trn_repair
+        ${trendWhereClause}
+        ${trendWhereClause ? 'AND' : 'WHERE'} open_date IS NOT NULL
+        GROUP BY 1, 2 ORDER BY 1
+      `, trendParams),
+
+      // 18b. Work area closed by close_date (no date filter) - same COALESCE as closedTrend
+      qualityPool.query(`
+        SELECT TO_CHAR(COALESCE(close_date, service_date, assessment_date, assign_date, open_date), 'YYYY-MM') AS month,
+          COALESCE(work_area, 'customer_room') AS work_area,
+          COUNT(*) AS closed
+        FROM trn_repair
+        ${trendWhereClause}
+        ${trendWhereClause ? 'AND' : 'WHERE'} job_sub_status IN ('completed', 'cancel')
+        GROUP BY 1, 2 ORDER BY 1
+      `, trendParams),
+
+      // 18c. Null-date open jobs by work_area (for backlog initial value)
+      qualityPool.query(`
+        SELECT COALESCE(work_area, 'customer_room') AS work_area, COUNT(*) AS cnt
+        FROM trn_repair
+        ${trendWhereClause}
+        ${trendWhereClause ? 'AND' : 'WHERE'} open_date IS NULL
+          AND job_sub_status NOT IN ('completed', 'cancel')
+        GROUP BY 1
+      `, trendParams),
+
+      // 18d. Work area completed by open_date (for backlog calc, matching trend logic)
+      qualityPool.query(`
+        SELECT TO_CHAR(open_date, 'YYYY-MM') AS month,
+          COALESCE(work_area, 'customer_room') AS work_area,
+          COUNT(*) AS completed
+        FROM trn_repair
+        ${trendWhereClause}
+        ${trendWhereClause ? 'AND' : 'WHERE'} open_date IS NOT NULL
+          AND job_sub_status IN ('completed', 'cancel')
+        GROUP BY 1, 2 ORDER BY 1
+      `, trendParams),
     ]);
 
     // Process KPIs
@@ -783,6 +831,32 @@ router.get('/overview', async (req, res, next) => {
         workArea: r.work_area,
         total: parseInt(r.total),
       })),
+      workAreaTrend: (() => {
+        const map = {};
+        for (const r of workAreaOpenedResult.rows) {
+          const m = thaiMonths[parseInt(r.month.split('-')[1]) - 1] + ' ' + r.month.split('-')[0].slice(2);
+          if (!map[m]) map[m] = { month: m };
+          map[m][r.work_area + '_opened'] = parseInt(r.opened);
+        }
+        for (const r of workAreaClosedResult.rows) {
+          const m = thaiMonths[parseInt(r.month.split('-')[1]) - 1] + ' ' + r.month.split('-')[0].slice(2);
+          if (!map[m]) map[m] = { month: m };
+          map[m][r.work_area + '_closed'] = parseInt(r.closed);
+        }
+        for (const r of workAreaCompletedResult.rows) {
+          const m = thaiMonths[parseInt(r.month.split('-')[1]) - 1] + ' ' + r.month.split('-')[0].slice(2);
+          if (!map[m]) map[m] = { month: m };
+          map[m][r.work_area + '_completed'] = parseInt(r.completed);
+        }
+        return Object.values(map);
+      })(),
+      workAreaNullDateOpen: (() => {
+        const result = {};
+        for (const r of workAreaNullDateResult.rows) {
+          result[r.work_area] = parseInt(r.cnt);
+        }
+        return result;
+      })(),
     });
   } catch (err) {
     next(err);

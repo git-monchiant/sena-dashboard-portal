@@ -104,6 +104,8 @@ export interface QualityOverviewData {
     closed: { day: number; count: number }[];
   };
   workAreaBreakdown: { workArea: string; total: number }[];
+  workAreaTrend: { month: string; [key: string]: string | number }[];
+  workAreaNullDateOpen: Record<string, number>;
 }
 
 export async function fetchQualityOverview(
