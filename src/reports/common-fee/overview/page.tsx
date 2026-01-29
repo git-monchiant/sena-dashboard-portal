@@ -318,40 +318,6 @@ export function CommonFeeOverviewPage() {
           <ArrowLeft className="w-4 h-4" />
           กลับไปหน้า Overview
         </Link>
-        {/* Sync Status Bar */}
-        {data && (
-          <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 mb-6">
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2">
-                <Database className="w-4 h-4 text-slate-500" />
-                <span className="text-sm text-slate-600">Last Sync:</span>
-                <span className="text-sm font-medium text-slate-800">{data.syncInfo.lastSyncAt}</span>
-              </div>
-              <div className="flex items-center gap-4 text-sm">
-                <div className="flex items-center gap-1.5">
-                  <Building2 className="w-4 h-4 text-blue-500" />
-                  <span className="text-slate-600">{data.syncInfo.totalProjects} โครงการ</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Users className="w-4 h-4 text-emerald-500" />
-                  <span className="text-slate-600">{data.syncInfo.totalUnits.toLocaleString()} ยูนิต</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <CheckCircle className="w-4 h-4 text-emerald-500" />
-                <span className="text-sm text-emerald-600 font-medium">Synced</span>
-              </div>
-            </div>
-            <button
-              onClick={() => navigate('/reports/common-fee/settings')}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-600 hover:text-primary-600 hover:bg-slate-100 rounded-lg transition-colors"
-            >
-              <Settings className="w-4 h-4" />
-              จัดการโครงการ
-            </button>
-          </div>
-        )}
-
         {/* Filters */}
         <SiteFilters
           onApply={handleApplyFilters}

@@ -14,6 +14,7 @@ function getCurrentMonth(): string {
 export interface QualityFilterState {
   projectId: string;
   projectType: string;
+  category: string;
   dateFrom: string;
   dateTo: string;
 }
@@ -26,6 +27,7 @@ interface ProjectOption {
 interface QualityFiltersProps {
   onApply: (filters: QualityFilterState) => void;
   projects?: ProjectOption[];
+  hideProject?: boolean;
 }
 
 // ===== Searchable Select (same pattern as Common Fee) =====
@@ -177,32 +179,42 @@ const projectTypeOptions: SelectOption[] = [
 
 const STORAGE_KEY = 'quality-overview-filters';
 
-function loadSavedFilters(): { projectId: string; projectType: string; dateFrom: string; dateTo: string; activePreset: string } {
+function loadSavedFilters(): { projectId: string; projectType: string; category: string; dateFrom: string; dateTo: string; activePreset: string } {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw);
   } catch {}
-  return { projectId: '', projectType: '', dateFrom: '', dateTo: '', activePreset: 'ทั้งหมด' };
+  return { projectId: '', projectType: '', category: '', dateFrom: '', dateTo: '', activePreset: 'ทั้งหมด' };
 }
 
-function saveFilters(projectId: string, projectType: string, dateFrom: string, dateTo: string, activePreset: string) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ projectId, projectType, dateFrom, dateTo, activePreset }));
+function saveFilters(projectId: string, projectType: string, category: string, dateFrom: string, dateTo: string, activePreset: string) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ projectId, projectType, category, dateFrom, dateTo, activePreset }));
 }
 
-export function QualityFilters({ onApply, projects = [] }: QualityFiltersProps) {
+export function QualityFilters({ onApply, projects = [], hideProject = false }: QualityFiltersProps) {
   const saved = loadSavedFilters();
   const [projectId, setProjectId] = useState(saved.projectId);
   const [projectType, setProjectType] = useState(saved.projectType);
+  const [category, setCategory] = useState(saved.category || '');
   const [dateFrom, setDateFrom] = useState(saved.dateFrom);
   const [dateTo, setDateTo] = useState(saved.dateTo);
   const [activePreset, setActivePreset] = useState(saved.activePreset);
+  const [categoryOptions, setCategoryOptions] = useState<SelectOption[]>([]);
   const initialLoadRef = useRef(true);
+
+  // Load category options
+  useEffect(() => {
+    fetch('/api/quality/categories')
+      .then(r => r.json())
+      .then(setCategoryOptions)
+      .catch(() => {});
+  }, []);
 
   // Emit saved filters on first render
   useEffect(() => {
     if (initialLoadRef.current) {
       initialLoadRef.current = false;
-      onApply({ projectId, projectType, dateFrom, dateTo });
+      onApply({ projectId, projectType, category, dateFrom, dateTo });
     }
   }, []);
 
@@ -211,31 +223,36 @@ export function QualityFilters({ onApply, projects = [] }: QualityFiltersProps) 
     label: p.project_name,
   }));
 
-  const emitFilters = (pId: string, pType: string, from: string, to: string, preset?: string) => {
-    saveFilters(pId, pType, from, to, preset ?? activePreset);
-    onApply({ projectId: pId, projectType: pType, dateFrom: from, dateTo: to });
+  const emitFilters = (pId: string, pType: string, cat: string, from: string, to: string, preset?: string) => {
+    saveFilters(pId, pType, cat, from, to, preset ?? activePreset);
+    onApply({ projectId: pId, projectType: pType, category: cat, dateFrom: from, dateTo: to });
   };
 
   const handleProjectChange = (value: string) => {
     setProjectId(value);
-    emitFilters(value, projectType, dateFrom, dateTo);
+    emitFilters(value, projectType, category, dateFrom, dateTo);
   };
 
   const handleProjectTypeChange = (value: string) => {
     setProjectType(value);
-    emitFilters(projectId, value, dateFrom, dateTo);
+    emitFilters(projectId, value, category, dateFrom, dateTo);
+  };
+
+  const handleCategoryChange = (value: string) => {
+    setCategory(value);
+    emitFilters(projectId, projectType, value, dateFrom, dateTo);
   };
 
   const handleDateFromChange = (value: string) => {
     setDateFrom(value);
     setActivePreset('');
-    emitFilters(projectId, projectType, value, dateTo, '');
+    emitFilters(projectId, projectType, category, value, dateTo, '');
   };
 
   const handleDateToChange = (value: string) => {
     setDateTo(value);
     setActivePreset('');
-    emitFilters(projectId, projectType, dateFrom, value, '');
+    emitFilters(projectId, projectType, category, dateFrom, value, '');
   };
 
   const handlePreset = (preset: typeof datePresets[number]) => {
@@ -243,7 +260,7 @@ export function QualityFilters({ onApply, projects = [] }: QualityFiltersProps) 
     setDateFrom(from);
     setDateTo(to);
     setActivePreset(preset.label);
-    emitFilters(projectId, projectType, from, to, preset.label);
+    emitFilters(projectId, projectType, category, from, to, preset.label);
   };
 
   return (
@@ -269,7 +286,7 @@ export function QualityFilters({ onApply, projects = [] }: QualityFiltersProps) 
           ))}
         </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div>
           <label className="block text-sm font-medium text-slate-600 mb-1">ประเภทโครงการ</label>
           <SearchableSelect
@@ -279,6 +296,7 @@ export function QualityFilters({ onApply, projects = [] }: QualityFiltersProps) 
             placeholder="ทั้งหมด"
           />
         </div>
+        {!hideProject && (
         <div>
           <label className="block text-sm font-medium text-slate-600 mb-1">โครงการ</label>
           <SearchableSelect
@@ -286,6 +304,16 @@ export function QualityFilters({ onApply, projects = [] }: QualityFiltersProps) 
             value={projectId}
             onChange={handleProjectChange}
             placeholder="ทุกโครงการ"
+          />
+        </div>
+        )}
+        <div>
+          <label className="block text-sm font-medium text-slate-600 mb-1">หมวดงาน</label>
+          <SearchableSelect
+            options={categoryOptions}
+            value={category}
+            onChange={handleCategoryChange}
+            placeholder="ทุกหมวด"
           />
         </div>
         <div>

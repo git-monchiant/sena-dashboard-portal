@@ -96,13 +96,12 @@ const reportModules: ReportModule[] = [
     icon: Wrench,
     basePath: '/quality',
     items: [
-      { name: 'ภาพรวม', href: '/quality' },
-      { name: 'รายการงานทั้งหมด', href: '/quality/requests' },
-      { name: 'ตามกลุ่มความรับผิดชอบ', href: '/quality/by-responsible' },
+      { name: 'Overview', href: '/quality' },
+      { name: 'Project Overview', href: '/quality/project-overview' },
+      { name: 'Category by Project', href: '/quality/category-by-project' },
       { name: 'Aging Report', href: '/quality/aging' },
-      { name: 'ประสิทธิภาพผู้รับเหมา', href: '/quality/contractor' },
-      { name: 'งานผิดปกติ', href: '/quality/exception' },
-      { name: 'ตั้งค่า', href: '/quality/settings' },
+      { name: 'All Requests', href: '/quality/requests' },
+      { name: 'Settings', href: '/quality/settings' },
     ],
   },
   {

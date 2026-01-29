@@ -1,9 +1,10 @@
 export { QualityOverviewPage, QualityFilters } from './overview';
 export type { QualityFilterState } from './overview';
-export { ByResponsiblePage } from './by-responsible';
 export { AgingPage as QualityAgingPage } from './aging';
 export { ContractorPage } from './contractor';
 export { ExceptionPage as QualityExceptionPage } from './exception';
 export { SettingsPage as QualitySettingsPage } from './settings';
-export { RequestsPage as QualityRequestsPage } from './requests';
+export { DataQualityPage } from './data-quality';
+export { ProjectOverviewQualityPage } from './project-overview';
+export { CategoryByProjectPage } from './category-by-project';
 export * from './types';

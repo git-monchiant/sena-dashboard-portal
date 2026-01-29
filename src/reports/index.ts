@@ -8,12 +8,10 @@ export {
 } from './common-fee';
 export {
   QualityOverviewPage,
-  ByResponsiblePage,
   QualityAgingPage,
-  ContractorPage,
-  QualityExceptionPage,
   QualitySettingsPage,
-  QualityRequestsPage,
+  ProjectOverviewQualityPage,
+  CategoryByProjectPage,
 } from './quality';
 export {
   SalesPerformance2025Page,

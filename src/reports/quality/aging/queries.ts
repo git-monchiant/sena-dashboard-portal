@@ -1,180 +1,112 @@
-import { ResponsibilityType, Priority, RequestCategory } from '../types';
-
-export interface AgingBracket {
-  bracket: string;
-  count: number;
-  percentage: number;
-  color: string;
-}
-
-export interface LongPendingJob {
+export interface AgingJob {
   id: string;
   requestNumber: string;
   projectName: string;
   unitNumber: string;
   category: string;
-  responsibilityType: ResponsibilityType;
-  priority: Priority;
-  openedDate: string;
-  daysOpen: number;
   assignee: string;
   status: string;
+  openDate: string;
+  assessmentDate: string | null;
+  assignDate: string | null;
+  serviceDate: string | null;
+  customerName: string;
+  daysOpen: number;
+  bucket: '0-30' | '31-45' | '46-60' | '61-120' | '120+';
 }
 
-export interface AgingByCategory {
-  category: RequestCategory;
-  totalJobs: number;
-  avgDaysOpen: number;
-  maxDaysOpen: number;
-}
-
-export interface AgingByResponsibility {
-  type: ResponsibilityType;
-  totalJobs: number;
-  avgDaysOpen: number;
-  jobsUnder7Days: number;
-  jobs7to14Days: number;
-  jobsOver14Days: number;
-}
-
-export interface AgingTrend {
-  month: string;
-  avgDaysOpen: number;
-  totalPending: number;
-  outsource: number;
-  senaWarranty: number;
-  juristicTechnician: number;
+export interface AgingPagination {
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 export interface AgingData {
-  summary: {
-    totalOpenJobs: number;
-    jobsUnder7Days: number;
-    jobs7to14Days: number;
-    jobsOver14Days: number;
-    avgDaysOpen: number;
-  };
-  agingBrackets: AgingBracket[];
-  longPendingJobs: LongPendingJob[];
-  agingByCategory: AgingByCategory[];
-  agingByResponsibility: AgingByResponsibility[];
-  agingTrend: AgingTrend[];
+  jobs: AgingJob[];
+  pagination: AgingPagination;
 }
 
-export async function fetchAgingData(): Promise<AgingData> {
-  await new Promise((resolve) => setTimeout(resolve, 500));
+export type AgingSortField = 'daysOpen' | 'requestNumber' | 'projectName' | 'unitNumber' | 'category' | 'assignee' | 'status' | 'openDate';
+export type SortOrder = 'asc' | 'desc';
 
-  return {
-    summary: {
-      totalOpenJobs: 187,
-      jobsUnder7Days: 97,
-      jobs7to14Days: 48,
-      jobsOver14Days: 42,
-      avgDaysOpen: 6.8,
-    },
-    agingBrackets: [
-      { bracket: '0-1 วัน', count: 45, percentage: 24.1, color: '#22c55e' },
-      { bracket: '2-3 วัน', count: 52, percentage: 27.8, color: '#84cc16' },
-      { bracket: '4-7 วัน', count: 48, percentage: 25.7, color: '#eab308' },
-      { bracket: '8-14 วัน', count: 25, percentage: 13.4, color: '#f97316' },
-      { bracket: '15-30 วัน', count: 12, percentage: 6.4, color: '#ef4444' },
-      { bracket: '>30 วัน', count: 5, percentage: 2.7, color: '#dc2626' },
-    ],
-    longPendingJobs: [
-      {
-        id: 'MR001',
-        requestNumber: 'MR-2024-001045',
-        projectName: 'เสนา วิลล่า พระราม 2',
-        unitNumber: 'B-1102',
-        category: 'โครงสร้าง',
-        responsibilityType: 'JURISTIC_TECHNICIAN',
-        priority: 'low',
-        openedDate: '2023-12-10',
-        daysOpen: 35,
-        assignee: 'นายวิชัย ฝีมือดี',
-        status: 'รอดำเนินการ',
-      },
-      {
-        id: 'MR002',
-        requestNumber: 'MR-2024-001089',
-        projectName: 'เสนา พาร์ค แกรนด์ รามอินทรา',
-        unitNumber: 'A-0512',
-        category: 'ประปา',
-        responsibilityType: 'OUTSOURCE',
-        priority: 'high',
-        openedDate: '2023-12-20',
-        daysOpen: 25,
-        assignee: 'หจก. ช่างบ้าน เซอร์วิส',
-        status: 'รอวัสดุ',
-      },
-      {
-        id: 'MR003',
-        requestNumber: 'MR-2024-001156',
-        projectName: 'เสนา ทาวเวอร์ สุขุมวิท',
-        unitNumber: 'C-2301',
-        category: 'ไฟฟ้า',
-        responsibilityType: 'JURISTIC_TECHNICIAN',
-        priority: 'medium',
-        openedDate: '2023-12-28',
-        daysOpen: 18,
-        assignee: 'นายสมชาย ช่างเก่ง',
-        status: 'กำลังดำเนินการ',
-      },
-      {
-        id: 'MR004',
-        requestNumber: 'MR-2024-001198',
-        projectName: 'เสนา วิลล่า พระราม 2',
-        unitNumber: 'B-0803',
-        category: 'งานร้องเรียนทั่วไป',
-        responsibilityType: 'SENA_WARRANTY',
-        priority: 'urgent',
-        openedDate: '2024-01-02',
-        daysOpen: 15,
-        assignee: 'SENA Team',
-        status: 'รอยืนยัน',
-      },
-      {
-        id: 'MR005',
-        requestNumber: 'MR-2024-001234',
-        projectName: 'เสนา พาร์ค แกรนด์ รามอินทรา',
-        unitNumber: 'A-1205',
-        category: 'ระบบปรับอากาศ',
-        responsibilityType: 'OUTSOURCE',
-        priority: 'high',
-        openedDate: '2024-01-05',
-        daysOpen: 12,
-        assignee: 'บริษัท เอ็มเจ เซอร์วิส',
-        status: 'รอนัดหมาย',
-      },
-    ],
-    agingByCategory: [
-      { category: 'electrical', totalJobs: 32, avgDaysOpen: 5.8, maxDaysOpen: 18 },
-      { category: 'plumbing', totalJobs: 28, avgDaysOpen: 4.5, maxDaysOpen: 14 },
-      { category: 'structure', totalJobs: 15, avgDaysOpen: 12.3, maxDaysOpen: 35 },
-      { category: 'architecture', totalJobs: 18, avgDaysOpen: 8.2, maxDaysOpen: 22 },
-      { category: 'aircon', totalJobs: 24, avgDaysOpen: 6.1, maxDaysOpen: 16 },
-      { category: 'elevator', totalJobs: 8, avgDaysOpen: 3.2, maxDaysOpen: 8 },
-      { category: 'security', totalJobs: 12, avgDaysOpen: 4.8, maxDaysOpen: 12 },
-      { category: 'fire_system', totalJobs: 6, avgDaysOpen: 2.5, maxDaysOpen: 6 },
-      { category: 'it_comm', totalJobs: 10, avgDaysOpen: 5.5, maxDaysOpen: 15 },
-      { category: 'common_area', totalJobs: 14, avgDaysOpen: 7.2, maxDaysOpen: 20 },
-      { category: 'sanitation', totalJobs: 8, avgDaysOpen: 3.8, maxDaysOpen: 10 },
-      { category: 'landscape', totalJobs: 6, avgDaysOpen: 9.5, maxDaysOpen: 25 },
-      { category: 'general_complaint', totalJobs: 4, avgDaysOpen: 6.8, maxDaysOpen: 18 },
-      { category: 'other', totalJobs: 2, avgDaysOpen: 4.2, maxDaysOpen: 11 },
-    ],
-    agingByResponsibility: [
-      { type: 'OUTSOURCE', totalJobs: 65, avgDaysOpen: 8.2, jobsUnder7Days: 28, jobs7to14Days: 22, jobsOver14Days: 15 },
-      { type: 'SENA_WARRANTY', totalJobs: 42, avgDaysOpen: 5.5, jobsUnder7Days: 25, jobs7to14Days: 12, jobsOver14Days: 5 },
-      { type: 'JURISTIC_TECHNICIAN', totalJobs: 80, avgDaysOpen: 6.1, jobsUnder7Days: 44, jobs7to14Days: 24, jobsOver14Days: 12 },
-    ],
-    agingTrend: [
-      { month: 'ม.ค.', avgDaysOpen: 8.5, totalPending: 165, outsource: 10.2, senaWarranty: 6.8, juristicTechnician: 8.5 },
-      { month: 'ก.พ.', avgDaysOpen: 8.0, totalPending: 172, outsource: 9.8, senaWarranty: 6.5, juristicTechnician: 7.8 },
-      { month: 'มี.ค.', avgDaysOpen: 7.5, totalPending: 178, outsource: 9.2, senaWarranty: 6.0, juristicTechnician: 7.2 },
-      { month: 'เม.ย.', avgDaysOpen: 7.2, totalPending: 180, outsource: 8.8, senaWarranty: 5.8, juristicTechnician: 7.0 },
-      { month: 'พ.ค.', avgDaysOpen: 7.0, totalPending: 185, outsource: 8.5, senaWarranty: 5.5, juristicTechnician: 6.8 },
-      { month: 'มิ.ย.', avgDaysOpen: 6.8, totalPending: 187, outsource: 8.2, senaWarranty: 5.5, juristicTechnician: 6.1 },
-    ],
-  };
+export type JobFilter = 'open' | 'closed' | 'all';
+
+export interface AgingFilters {
+  projectId?: string;
+  projectType?: string;
+  category?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  jobFilter?: JobFilter;
+  bucket?: '0-30' | '31-45' | '46-60' | '61-120' | '120+';
+  search?: string;
+  sortBy?: AgingSortField;
+  sortOrder?: SortOrder;
+  limit?: number;
+  offset?: number;
+}
+
+export interface JobDetail {
+  id: string;
+  requestNumber: string;
+  projectName: string;
+  unitNumber: string;
+  customerName: string;
+  customerPhone: string;
+  category: string;
+  status: string;
+  jobStatus: string;
+  issue: string;
+  symptom: string;
+  symptomDetail: string;
+  openDate: string;
+  assessmentDate: string | null;
+  assignDate: string | null;
+  serviceDate: string | null;
+  closeDate: string | null;
+  slaDate: string | null;
+  assignee: string;
+  technicianEmail: string;
+  technicianDetail: string;
+  technicianNote: string;
+  adminNote: string;
+  jobHistory: string;
+  beforeImageUrl: string;
+  afterImageUrl: string;
+  customerImageUrl: string;
+  isUrgent: boolean;
+  warrantyStatus: string;
+  slaExceeded: boolean;
+  requestChannel: string;
+  reviewScore: number | null;
+  reviewComment: string;
+  reviewDate: string | null;
+  daysOpen: number;
+}
+
+export async function fetchJobDetail(id: string): Promise<JobDetail> {
+  const res = await fetch(`/api/quality/job/${encodeURIComponent(id)}`);
+  if (!res.ok) throw new Error('Failed to fetch job detail');
+  return res.json();
+}
+
+export async function fetchAgingData(filters: AgingFilters = {}): Promise<AgingData> {
+  const params = new URLSearchParams();
+
+  if (filters.projectId) params.set('project_id', filters.projectId);
+  if (filters.projectType) params.set('project_type', filters.projectType);
+  if (filters.category) params.set('category', filters.category);
+  if (filters.dateFrom) params.set('date_from', filters.dateFrom);
+  if (filters.dateTo) params.set('date_to', filters.dateTo);
+  if (filters.jobFilter) params.set('job_filter', filters.jobFilter);
+  if (filters.bucket) params.set('bucket', filters.bucket);
+  if (filters.search) params.set('search', filters.search);
+  if (filters.sortBy) params.set('sort_by', filters.sortBy);
+  if (filters.sortOrder) params.set('sort_order', filters.sortOrder);
+  if (filters.limit) params.set('limit', filters.limit.toString());
+  if (filters.offset !== undefined) params.set('offset', filters.offset.toString());
+
+  const res = await fetch(`/api/quality/aging?${params.toString()}`);
+  if (!res.ok) throw new Error('Failed to fetch aging data');
+  return res.json();
 }

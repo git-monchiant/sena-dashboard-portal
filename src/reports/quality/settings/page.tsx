@@ -196,7 +196,7 @@ export function SettingsPage() {
   return (
     <div className="min-h-screen">
       <PageHeader
-        title="ตั้งค่างานซ่อม / ร้องเรียน"
+        title="Settings"
         subtitle="จัดการโครงการและ Sync ข้อมูลจากระบบ Fix-It"
       />
 

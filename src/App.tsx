@@ -11,12 +11,10 @@ import {
   CommonFeeSettingsPage,
   ProjectCollectionPage,
   QualityOverviewPage,
-  ByResponsiblePage,
   QualityAgingPage,
-  ContractorPage,
-  QualityExceptionPage,
   QualitySettingsPage,
-  QualityRequestsPage,
+  ProjectOverviewQualityPage,
+  CategoryByProjectPage,
   SalesPerformance2025Page,
   ProjectDetailPage,
   EmployeeListPage,
@@ -66,12 +64,11 @@ function App() {
 
             {/* Quality Report Module */}
             <Route path="quality" element={<QualityOverviewPage />} />
-            <Route path="quality/requests" element={<QualityRequestsPage />} />
-            <Route path="quality/by-responsible" element={<ByResponsiblePage />} />
+            <Route path="quality/requests" element={<QualityAgingPage />} />
             <Route path="quality/aging" element={<QualityAgingPage />} />
-            <Route path="quality/contractor" element={<ContractorPage />} />
-            <Route path="quality/exception" element={<QualityExceptionPage />} />
             <Route path="quality/settings" element={<QualitySettingsPage />} />
+            <Route path="quality/project-overview" element={<ProjectOverviewQualityPage />} />
+            <Route path="quality/category-by-project" element={<CategoryByProjectPage />} />
 
             {/* Data Tools Module */}
             <Route path="data-tools/excel-import" element={<ExcelImportPage />} />

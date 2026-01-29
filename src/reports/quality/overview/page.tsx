@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { PageHeader, KPICard } from '@shared/ui';
 import { QualityFilters, QualityFilterState } from './filters';
 import {
@@ -7,17 +7,16 @@ import {
   fetchProjects,
   fetchCategoryTrend,
   QualityOverviewData,
-  ProjectDefect,
   ProjectOption,
   CategoryTrendPoint,
 } from './queries';
 import {
   Wrench,
   Clock,
-  AlertTriangle,
   TrendingUp,
-  CheckCircle,
   ArrowRight,
+  ArrowLeft,
+  CheckCircle,
   FileText,
   Users,
   Building2,
@@ -37,7 +36,6 @@ import {
   Cell,
   BarChart,
   Bar,
-  Legend,
   LabelList,
 } from 'recharts';
 
@@ -53,7 +51,7 @@ function QuickLinkCard({ title, description, href, icon: Icon, count }: QuickLin
   const navigate = useNavigate();
   return (
     <button
-      onClick={() => navigate(href)}
+      onClick={() => navigate(href, { state: { fromPage: true } })}
       className="card-hover flex items-center gap-4 text-left w-full group"
     >
       <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center group-hover:bg-slate-200 transition-colors">
@@ -75,71 +73,6 @@ function QuickLinkCard({ title, description, href, icon: Icon, count }: QuickLin
   );
 }
 
-function ProjectDefectRow({ project, isLast }: { project: ProjectDefect; isLast: boolean }) {
-  const hasUrgent = project.defectsOver14Days > 10;
-  const completionGood = project.completionRate >= 85;
-  const resolutionSlow = project.avgResolutionDays > 7;
-
-  let status: 'critical' | 'warning' | 'good' = 'good';
-  if (hasUrgent || project.completionRate < 80) {
-    status = 'critical';
-  } else if (project.defectsOver14Days > 5 || project.completionRate < 85) {
-    status = 'warning';
-  }
-
-  const statusConfig = {
-    critical: { label: 'ต้องเร่ง', bg: 'bg-red-100', text: 'text-red-700' },
-    warning: { label: 'ติดตาม', bg: 'bg-amber-100', text: 'text-amber-700' },
-    good: { label: 'ปกติ', bg: 'bg-green-100', text: 'text-green-700' },
-  };
-
-  return (
-    <tr className={`hover:bg-slate-50 transition-colors ${!isLast ? 'border-b border-slate-100' : ''}`}>
-      <td className="py-3 px-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
-            <Building2 className="w-5 h-5 text-purple-600" />
-          </div>
-          <span className="font-medium text-slate-800">{project.projectName}</span>
-        </div>
-      </td>
-      <td className="py-3 px-4 text-center">
-        <span className="text-lg font-bold text-slate-800">{project.totalDefects.toLocaleString()}</span>
-      </td>
-      <td className="py-3 px-4 text-center">
-        <span className="text-lg font-bold text-amber-600">{project.openDefects.toLocaleString()}</span>
-      </td>
-      <td className="py-3 px-4 text-center">
-        <span className={`text-lg font-bold ${hasUrgent ? 'text-red-600' : 'text-slate-600'}`}>
-          {project.defectsOver14Days.toLocaleString()}
-        </span>
-      </td>
-      <td className="py-3 px-4 text-center">
-        <span className={`text-sm font-semibold ${resolutionSlow ? 'text-red-600' : 'text-slate-600'}`}>
-          {project.avgResolutionDays} วัน
-        </span>
-      </td>
-      <td className="py-3 px-4 text-center">
-        <div className="flex items-center justify-center gap-2">
-          <div className="w-16 h-2 bg-slate-100 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full ${completionGood ? 'bg-green-500' : 'bg-amber-500'}`}
-              style={{ width: `${project.completionRate}%` }}
-            />
-          </div>
-          <span className={`text-sm font-semibold ${completionGood ? 'text-green-600' : 'text-amber-600'}`}>
-            {project.completionRate}%
-          </span>
-        </div>
-      </td>
-      <td className="py-3 px-4 text-center">
-        <span className={`inline-flex px-2.5 py-1 text-xs font-semibold rounded-full ${statusConfig[status].bg} ${statusConfig[status].text}`}>
-          {statusConfig[status].label}
-        </span>
-      </td>
-    </tr>
-  );
-}
 
 // Group small pie slices (< threshold%) into "อื่นๆ"
 // _otherDetails stores the breakdown for tooltip display
@@ -158,21 +91,25 @@ function groupSmallSlices<T extends Record<string, unknown>>(
   if (total === 0) return data;
   const big: T[] = [];
   let otherSum = 0;
+  let otherUnits = 0;
   const details: OtherDetail[] = [];
   for (const d of data) {
     const pct = ((d[valueKey] as number) / total) * 100;
     if (pct < threshold) {
       otherSum += d[valueKey] as number;
+      otherUnits += (d as any).units || 0;
       details.push({ name: d[nameKey] as string, value: d[valueKey] as number });
     } else {
       big.push(d);
     }
   }
+  big.sort((a, b) => (b[valueKey] as number) - (a[valueKey] as number));
   if (otherSum > 0) {
     _otherDetails.set(groupKey, details);
     big.push({
       [nameKey]: 'อื่นๆ',
       [valueKey]: otherSum,
+      units: otherUnits,
       color: otherColor,
       label: 'อื่นๆ',
       channel: 'อื่นๆ',
@@ -187,31 +124,80 @@ function getOtherDetails(groupKey: string): OtherDetail[] {
   return _otherDetails.get(groupKey) || [];
 }
 
-type DefectViewMode = 'status' | 'category';
+function LegendItem({ color, label, isOther, groupKey }: { color: string; label: string; isOther?: boolean; groupKey?: string }) {
+  const [show, setShow] = useState(false);
+  const details = isOther && groupKey ? getOtherDetails(groupKey) : [];
+  return (
+    <div
+      style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2, position: 'relative', cursor: isOther ? 'help' : 'default' }}
+      onMouseEnter={() => isOther && setShow(true)}
+      onMouseLeave={() => setShow(false)}
+    >
+      <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, backgroundColor: color, flexShrink: 0 }} />
+      <span>{label}</span>
+      {show && details.length > 0 && (
+        <div style={{ position: 'absolute', bottom: '100%', left: 0, marginBottom: 4, zIndex: 50 }}
+          className="bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-lg whitespace-nowrap">
+          <p className="text-[10px] font-semibold text-slate-600 mb-1">ประกอบด้วย:</p>
+          {details.map((d, i) => (
+            <p key={i} className="text-[10px] text-slate-500">{d.name}: {d.value.toLocaleString()}</p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 
 const subStatusColors: Record<string, string> = {
   completed: '#22c55e',
   cancel: '#ef4444',
   serviceInProgress: '#3b82f6',
+  technicianDispatchPending: '#f59e0b',
+  confirmAppointmentPending: '#8b5cf6',
+  appointmentPending: '#a78bfa',
+  inspectionPending: '#06b6d4',
+  repairInProgress: '#2563eb',
   '': '#9ca3af',
 };
 const subStatusLabels: Record<string, string> = {
   completed: 'เสร็จสิ้น',
   cancel: 'ยกเลิก',
-  serviceInProgress: 'กำลังดำเนินการ',
+  serviceInProgress: 'กำลังซ่อม',
+  technicianDispatchPending: 'รอส่งช่าง',
+  confirmAppointmentPending: 'รอยืนยันนัดหมาย',
+  appointmentPending: 'รอนัดหมาย',
+  inspectionPending: 'รอตรวจสอบ',
+  repairInProgress: 'ซ่อมอยู่',
   '': 'ไม่ระบุ',
 };
 
 export function QualityOverviewPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const fromProject = !!(location.state as any)?.fromProject;
+  const fromPage = !!(location.state as any)?.fromPage;
+
+  // If not coming from project-overview, clear projectId from saved filters
+  if (!fromProject) {
+    try {
+      const saved = JSON.parse(localStorage.getItem('quality-overview-filters') || '{}');
+      if (saved.projectId) {
+        localStorage.setItem('quality-overview-filters', JSON.stringify({ ...saved, projectId: '' }));
+      }
+    } catch {}
+  }
+
   const [data, setData] = useState<QualityOverviewData | null>(null);
   const [projects, setProjects] = useState<ProjectOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [defectViewMode, setDefectViewMode] = useState<DefectViewMode>('status');
+
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [categoryTrend, setCategoryTrend] = useState<CategoryTrendPoint[]>([]);
   const [categoryTrendLoading, setCategoryTrendLoading] = useState(false);
-  const [currentFilters, setCurrentFilters] = useState<QualityFilterState>({ projectId: '', projectType: '', dateFrom: '', dateTo: '' });
+  const [currentFilters, setCurrentFilters] = useState<QualityFilterState>({ projectId: '', projectType: '', category: '', dateFrom: '', dateTo: '' });
+
 
   const loadCategoryTrend = async (category: string, filters: QualityFilterState) => {
     setCategoryTrendLoading(true);
@@ -269,7 +255,7 @@ export function QualityOverviewPage() {
           subtitle="ระบบบริหารจัดการงานซ่อมและข้อร้องเรียนพื้นที่ส่วนกลาง"
         />
         <div className="p-8">
-          <QualityFilters onApply={handleApplyFilters} projects={projects} />
+          <QualityFilters onApply={handleApplyFilters} projects={projects} hideProject={!currentFilters.projectId} />
           <div className="animate-pulse space-y-6">
             <div className="grid grid-cols-5 gap-6">
               {[1, 2, 3, 4, 5].map((i) => (
@@ -287,110 +273,97 @@ export function QualityOverviewPage() {
       const existing = acc.find(a => a.status === key);
       if (existing) {
         existing.value += s.count;
+        existing.units = (existing.units || 0) + ((s as any).units || 0);
       } else {
         acc.push({
           status: key,
           name: subStatusLabels[key] || key,
           value: s.count,
+          units: (s as any).units || 0,
           color: subStatusColors[key] || '#9ca3af',
         });
       }
       return acc;
-    }, [] as { status: string; name: string; value: number; color: string }[])
+    }, [] as { status: string; name: string; value: number; units: number; color: string }[])
     .sort((a, b) => b.value - a.value);
 
   const groupedStatusPieData = groupSmallSlices(statusPieData, 'value', 'name', 'status');
   const groupedWarrantyData = groupSmallSlices(data.warrantyDistribution, 'total', 'label', 'warranty');
   const groupedChannelData = groupSmallSlices(data.requestChannelDistribution, 'total', 'channel', 'channel');
 
-  // Category stacked bar data
-  const topCategories = data.allCategories.slice(0, 8);
-  const categoryBarColors = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#06b6d4', '#f97316', '#64748b'];
 
-  const projectCategoryData = data.projectDefectsByCategory.slice(0, 20).map((p) => {
-    const row: Record<string, unknown> = { name: p.projectName?.replace(/^เสนา\s*/, '') || p.projectId, total: p.total };
-    for (const cat of topCategories) {
-      row[cat] = p.categories[cat] || 0;
-    }
-    let otherSum = 0;
-    for (const [cat, cnt] of Object.entries(p.categories)) {
-      if (!topCategories.includes(cat)) otherSum += cnt as number;
-    }
-    if (otherSum > 0) row['อื่นๆ'] = otherSum;
-    return row;
-  });
+
+
+  const selectedProjectName = currentFilters.projectId ? projects.find(p => p.project_id === currentFilters.projectId)?.project_name : '';
+  const clearProject = () => {
+    const saved = JSON.parse(localStorage.getItem('quality-overview-filters') || '{}');
+    localStorage.setItem('quality-overview-filters', JSON.stringify({ ...saved, projectId: '' }));
+    setCurrentFilters({ ...currentFilters, projectId: '' });
+  };
 
   return (
     <div className="min-h-screen">
       <PageHeader
-        title="ภาพรวมงานซ่อม / ร้องเรียน"
-        subtitle="ระบบบริหารจัดการงานซ่อมและข้อร้องเรียนพื้นที่ส่วนกลาง"
+        title="Overview"
+        subtitle="ภาพรวมงานซ่อม / ร้องเรียนพื้นที่ส่วนกลาง"
       />
 
       <div className="p-8">
-        {/* Sync Status Bar */}
-        <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 mb-6">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-              <Database className="w-4 h-4 text-slate-500" />
-              <span className="text-sm text-slate-600">ข้อมูลล่าสุด:</span>
-              <span className="text-sm font-medium text-slate-800">
-                {data.syncInfo.lastDataDate ? new Date(data.syncInfo.lastDataDate).toLocaleDateString('th-TH') : '-'}
-              </span>
-            </div>
-            <div className="flex items-center gap-4 text-sm">
-              <div className="flex items-center gap-1.5">
-                <Building2 className="w-4 h-4 text-blue-500" />
-                <span className="text-slate-600">{data.syncInfo.totalProjects.toLocaleString()} โครงการ</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Users className="w-4 h-4 text-emerald-500" />
-                <span className="text-slate-600">{data.syncInfo.totalUnits.toLocaleString()} ยูนิต</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <CheckCircle className="w-4 h-4 text-emerald-500" />
-              <span className="text-sm text-emerald-600 font-medium">Connected</span>
-            </div>
+        {currentFilters.projectId && (
+          <div className="flex items-center gap-3 mb-4">
+            <button onClick={() => { clearProject(); navigate('/quality/project-overview'); }} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+              <ArrowLeft className="w-5 h-5 text-slate-600" />
+            </button>
+            <span className="text-sm text-slate-500">กลับไป Project Overview</span>
+            {selectedProjectName && <span className="text-sm font-semibold text-primary-700">· {selectedProjectName}</span>}
           </div>
-          <button
-            onClick={() => navigate('/quality/settings')}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-600 hover:text-primary-600 hover:bg-slate-100 rounded-lg transition-colors"
-          >
-            <Settings className="w-4 h-4" />
-            ตั้งค่า
-          </button>
-        </div>
-
+        )}
         {/* Filters */}
-        <QualityFilters onApply={handleApplyFilters} projects={projects} />
+        <QualityFilters onApply={handleApplyFilters} projects={projects} hideProject={!currentFilters.projectId} />
 
         {/* KPI Cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+          <div
+            className="card text-left cursor-pointer hover:shadow-md hover:border-primary-200 transition-all"
+            onClick={() => navigate('/quality/requests', { state: { jobFilter: 'all', fromPage: true } })}
+          >
+            <div className="flex items-start justify-between mb-2">
+              <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center">
+                <Wrench className="w-4 h-4" />
+              </div>
+            </div>
+            <p className="text-xl font-bold text-blue-600">{data.kpis.totalJobs.toLocaleString()}</p>
+            <p className="text-xs text-slate-500 font-medium mb-1">งานทั้งหมด</p>
+            {(data.workAreaBreakdown || []).map((wa) => {
+              const labels: Record<string, string> = { customer_room: 'ห้องลูกค้า', sales_office: 'สนง.ขาย', common_area: 'ส่วนกลาง', central_area: 'ซ่อมส่วนกลาง' };
+              const colors: Record<string, string> = { customer_room: 'text-blue-500', sales_office: 'text-amber-500', common_area: 'text-emerald-500', central_area: 'text-purple-500' };
+              return (
+                <div key={wa.workArea} className="flex items-center justify-between" style={{ fontSize: '10px' }}>
+                  <span className={`${colors[wa.workArea] || 'text-slate-400'}`}>{labels[wa.workArea] || wa.workArea}</span>
+                  <span className="text-slate-600 font-medium">{wa.total.toLocaleString()}</span>
+                </div>
+              );
+            })}
+          </div>
           <KPICard
-            title="งานทั้งหมด"
-            value={data.kpis.totalJobs.toLocaleString()}
-            icon={Wrench}
-            color="blue"
-            href="/quality/requests"
+            title="งานปิดแล้ว"
+            value={(data.kpis.totalJobs - data.kpis.openJobs).toLocaleString()}
+            change={`${(data.kpis.totalJobs > 0 ? (((data.kpis.totalJobs - data.kpis.openJobs) / data.kpis.totalJobs) * 100).toFixed(1) : 0)}%`}
+            showArrow={false}
+            subtext={`${data.kpis.closedUnits?.toLocaleString() ?? 0} ยูนิต`}
+            icon={CheckCircle}
+            color="emerald"
+            onClick={() => navigate('/quality/requests', { state: { jobFilter: 'closed', fromPage: true } })}
           />
           <KPICard
             title="งานเปิดอยู่"
             value={data.kpis.openJobs.toLocaleString()}
-            change={data.kpis.totalJobs > 0 ? `${((data.kpis.openJobs / data.kpis.totalJobs) * 100).toFixed(1)}%` : undefined}
-            changeType="negative"
+            change={`${(data.kpis.totalJobs > 0 ? ((data.kpis.openJobs / data.kpis.totalJobs) * 100).toFixed(1) : 0)}%`}
             showArrow={false}
+            subtext={`${data.kpis.openUnits?.toLocaleString() ?? 0} ยูนิต`}
             icon={Clock}
             color="amber"
-          />
-          <KPICard
-            title="งานปิดแล้ว"
-            value={(data.kpis.totalJobs - data.kpis.openJobs).toLocaleString()}
-            change={data.kpis.totalJobs > 0 ? `${(((data.kpis.totalJobs - data.kpis.openJobs) / data.kpis.totalJobs) * 100).toFixed(1)}%` : undefined}
-            changeType="positive"
-            showArrow={false}
-            icon={CheckCircle}
-            color="emerald"
+            onClick={() => navigate('/quality/aging', { state: { jobFilter: 'open', fromPage: true } })}
           />
           <KPICard
             title="เวลาเฉลี่ยปิดงาน"
@@ -412,217 +385,222 @@ export function QualityOverviewPage() {
           <div className="card p-3 flex flex-col justify-between" style={{ minHeight: 0 }}>
             {/* Status Distribution Pie */}
             <div className="flex-1 min-h-0">
-              <h3 className="font-semibold text-slate-800 text-xs mb-0">สถานะงาน</h3>
-              <ResponsiveContainer width="100%" height={105}>
-                <PieChart>
-                  <Pie
-                    data={groupedStatusPieData}
-                    cx="30%"
-                    cy="50%"
-                    innerRadius={15}
-                    outerRadius={35}
-                    paddingAngle={2}
-                    dataKey="value"
-                  >
-                    {groupedStatusPieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Legend
-                    layout="vertical"
-                    align="right"
-                    verticalAlign="middle"
-                    iconSize={8}
-                    wrapperStyle={{ fontSize: 10, lineHeight: '16px', paddingLeft: 4 }}
-                    formatter={(value: string, entry: any) => {
-                      const item = entry.payload;
-                      const total = groupedStatusPieData.reduce((s, d) => s + d.value, 0);
-                      const pct = total > 0 ? ((item.value / total) * 100).toFixed(0) : 0;
-                      return `${item.name} ${item.value.toLocaleString()} (${pct}%)`;
-                    }}
-                  />
-                  <Tooltip
-                    content={({ active, payload }) => {
-                      if (!active || !payload?.length) return null;
-                      const item = payload[0].payload;
-                      const details = item._isOther ? getOtherDetails(item._groupKey) : [];
-                      return (
-                        <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-lg">
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                            <span className="text-sm text-slate-700">{item.name}</span>
+              <h3 className="font-semibold text-slate-800 text-xs mb-0">สถานะงาน <span className="font-normal text-slate-400">({groupedStatusPieData.reduce((s, d) => s + (d.value as number), 0).toLocaleString()} งาน, {data.kpis.distinctUnits?.toLocaleString() ?? 0} ยูนิต)</span></h3>
+              <div className="flex items-center gap-3" style={{ height: 90 }}>
+                <div style={{ width: 90, minWidth: 90, height: 90 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={groupedStatusPieData} cx="50%" cy="50%" innerRadius={15} outerRadius={35} paddingAngle={2} dataKey="value">
+                        {groupedStatusPieData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                      </Pie>
+                      <Tooltip content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null;
+                        const item = payload[0].payload;
+                        const details = item._isOther ? getOtherDetails(item._groupKey) : [];
+                        return (
+                          <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-lg">
+                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} /><span className="text-sm text-slate-700">{item.name}</span></div>
+                            <p className="text-sm font-semibold text-slate-800 mt-1">{item.value.toLocaleString()} งาน</p>
+                            {details.length > 0 && (<div className="mt-1.5 pt-1.5 border-t border-slate-100 space-y-0.5">{details.map((d, i) => <p key={i} className="text-xs text-slate-500">{d.name}: {d.value.toLocaleString()}</p>)}</div>)}
                           </div>
-                          <p className="text-sm font-semibold text-slate-800 mt-1">{item.value.toLocaleString()} งาน</p>
-                          {details.length > 0 && (
-                            <div className="mt-1.5 pt-1.5 border-t border-slate-100 space-y-0.5">
-                              {details.map((d, i) => (
-                                <p key={i} className="text-xs text-slate-500">{d.name}: {d.value.toLocaleString()}</p>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+                        );
+                      }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div style={{ fontSize: 10, lineHeight: '16px' }}>
+                  {(() => {
+                    const total = groupedStatusPieData.reduce((s, d) => s + (d.value as number), 0);
+                    return [...groupedStatusPieData].sort((a, b) => (b.value as number) - (a.value as number)).map((item, i) => {
+                      const pct = total > 0 ? (((item.value as number) / total) * 100).toFixed(0) : 0;
+                      return <LegendItem key={i} color={item.color} label={`${item.name} ${(item.value as number).toLocaleString()} (${pct}%)`} isOther={(item as any)._isOther} groupKey={(item as any)._groupKey} />;
+                    });
+                  })()}
+                </div>
+              </div>
             </div>
 
             <hr className="border-slate-100" />
 
             {/* Warranty Distribution Pie */}
             <div className="flex-1 min-h-0">
-              <h3 className="font-semibold text-slate-800 text-xs mb-0">ประเภทประกัน</h3>
-              <ResponsiveContainer width="100%" height={105}>
-                <PieChart>
-                  <Pie
-                    data={groupedWarrantyData}
-                    cx="30%"
-                    cy="50%"
-                    innerRadius={15}
-                    outerRadius={35}
-                    paddingAngle={2}
-                    dataKey="total"
-                    nameKey="label"
-                  >
-                    {groupedWarrantyData.map((entry, index) => (
-                      <Cell key={`wc-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Legend
-                    layout="vertical"
-                    align="right"
-                    verticalAlign="middle"
-                    iconSize={8}
-                    wrapperStyle={{ fontSize: 10, lineHeight: '16px', paddingLeft: 4 }}
-                    formatter={(value: string, entry: any) => {
-                      const item = entry.payload;
-                      const total = groupedWarrantyData.reduce((s, d) => s + (d.total as number), 0);
-                      const pct = total > 0 ? ((item.total / total) * 100).toFixed(0) : 0;
-                      return `${item.label} ${item.total.toLocaleString()} (${pct}%)`;
-                    }}
-                  />
-                  <Tooltip
-                    content={({ active, payload }) => {
-                      if (!active || !payload?.length) return null;
-                      const item = payload[0].payload;
-                      const details = item._isOther ? getOtherDetails(item._groupKey) : [];
-                      return (
-                        <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-lg">
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                            <span className="text-sm text-slate-700">{item.label}</span>
+              <h3 className="font-semibold text-slate-800 text-xs mb-0">ประเภทประกัน <span className="font-normal text-slate-400">({groupedWarrantyData.reduce((s, d) => s + (d.total as number), 0).toLocaleString()} งาน, {data.kpis.distinctUnits?.toLocaleString() ?? 0} ยูนิต)</span></h3>
+              <div className="flex items-center gap-3" style={{ height: 90 }}>
+                <div style={{ width: 90, minWidth: 90, height: 90 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={groupedWarrantyData} cx="50%" cy="50%" innerRadius={15} outerRadius={35} paddingAngle={2} dataKey="total" nameKey="label">
+                        {groupedWarrantyData.map((entry, index) => <Cell key={`wc-${index}`} fill={entry.color} />)}
+                      </Pie>
+                      <Tooltip content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null;
+                        const item = payload[0].payload;
+                        const details = item._isOther ? getOtherDetails(item._groupKey) : [];
+                        return (
+                          <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-lg">
+                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} /><span className="text-sm text-slate-700">{item.label}</span></div>
+                            <p className="text-sm text-slate-800 mt-1">ทั้งหมด: <span className="font-semibold">{item.total.toLocaleString()}</span> งาน</p>
+                            {item.openJobs !== undefined && <p className="text-sm text-slate-800">เปิดอยู่: <span className="font-semibold">{item.openJobs.toLocaleString()}</span> งาน</p>}
+                            {details.length > 0 && (<div className="mt-1.5 pt-1.5 border-t border-slate-100 space-y-0.5"><p className="text-xs font-medium text-slate-600">ประกอบด้วย:</p>{details.map((d, i) => <p key={i} className="text-xs text-slate-500">{d.name}: {d.value.toLocaleString()}</p>)}</div>)}
                           </div>
-                          <p className="text-sm text-slate-800 mt-1">ทั้งหมด: <span className="font-semibold">{item.total.toLocaleString()}</span> งาน</p>
-                          {item.openJobs !== undefined && (
-                            <p className="text-sm text-slate-800">เปิดอยู่: <span className="font-semibold">{item.openJobs.toLocaleString()}</span> งาน</p>
-                          )}
-                          {details.length > 0 && (
-                            <div className="mt-1.5 pt-1.5 border-t border-slate-100 space-y-0.5">
-                              <p className="text-xs font-medium text-slate-600">ประกอบด้วย:</p>
-                              {details.map((d, i) => (
-                                <p key={i} className="text-xs text-slate-500">{d.name}: {d.value.toLocaleString()}</p>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+                        );
+                      }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div style={{ fontSize: 10, lineHeight: '16px' }}>
+                  {(() => {
+                    const total = groupedWarrantyData.reduce((s, d) => s + (d.total as number), 0);
+                    return [...groupedWarrantyData].sort((a, b) => (b.total as number) - (a.total as number)).map((item, i) => {
+                      const pct = total > 0 ? (((item.total as number) / total) * 100).toFixed(0) : 0;
+                      return <LegendItem key={i} color={item.color as string} label={`${item.label as string} ${(item.total as number).toLocaleString()} (${pct}%)`} isOther={(item as any)._isOther} groupKey={(item as any)._groupKey} />;
+                    });
+                  })()}
+                </div>
+              </div>
             </div>
 
             <hr className="border-slate-100" />
 
             {/* Request Channel Pie */}
             <div className="flex-1 min-h-0">
-              <h3 className="font-semibold text-slate-800 text-xs mb-0">ช่องทางแจ้งงาน</h3>
-              <ResponsiveContainer width="100%" height={105}>
-                <PieChart>
-                  <Pie
-                    data={groupedChannelData}
-                    cx="30%"
-                    cy="50%"
-                    innerRadius={15}
-                    outerRadius={35}
-                    paddingAngle={2}
-                    dataKey="total"
-                    nameKey="channel"
-                  >
-                    {groupedChannelData.map((entry, index) => (
-                      <Cell key={`rc-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Legend
-                    layout="vertical"
-                    align="right"
-                    verticalAlign="middle"
-                    iconSize={8}
-                    wrapperStyle={{ fontSize: 10, lineHeight: '16px', paddingLeft: 4 }}
-                    formatter={(value: string, entry: any) => {
-                      const item = entry.payload;
-                      const total = groupedChannelData.reduce((s, d) => s + (d.total as number), 0);
-                      const pct = total > 0 ? ((item.total / total) * 100).toFixed(0) : 0;
-                      return `${item.channel} ${item.total.toLocaleString()} (${pct}%)`;
-                    }}
-                  />
-                  <Tooltip
-                    content={({ active, payload }) => {
-                      if (!active || !payload?.length) return null;
-                      const item = payload[0].payload;
-                      const details = item._isOther ? getOtherDetails(item._groupKey) : [];
-                      return (
-                        <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-lg">
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                            <span className="text-sm text-slate-700">{item.channel}</span>
+              <h3 className="font-semibold text-slate-800 text-xs mb-0">ช่องทางแจ้งงาน <span className="font-normal text-slate-400">({groupedChannelData.reduce((s, d) => s + (d.total as number), 0).toLocaleString()} งาน)</span></h3>
+              <div className="flex items-center gap-3" style={{ height: 90 }}>
+                <div style={{ width: 90, minWidth: 90, height: 90 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={groupedChannelData} cx="50%" cy="50%" innerRadius={15} outerRadius={35} paddingAngle={2} dataKey="total" nameKey="channel">
+                        {groupedChannelData.map((entry, index) => <Cell key={`rc-${index}`} fill={entry.color} />)}
+                      </Pie>
+                      <Tooltip content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null;
+                        const item = payload[0].payload;
+                        const details = item._isOther ? getOtherDetails(item._groupKey) : [];
+                        return (
+                          <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-lg">
+                            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} /><span className="text-sm text-slate-700">{item.channel}</span></div>
+                            <p className="text-sm text-slate-800 mt-1">ทั้งหมด: <span className="font-semibold">{item.total.toLocaleString()}</span> งาน</p>
+                            {item.openJobs !== undefined && <p className="text-sm text-slate-800">เปิดอยู่: <span className="font-semibold">{item.openJobs.toLocaleString()}</span> งาน</p>}
+                            {details.length > 0 && (<div className="mt-1.5 pt-1.5 border-t border-slate-100 space-y-0.5"><p className="text-xs font-medium text-slate-600">ประกอบด้วย:</p>{details.map((d, i) => <p key={i} className="text-xs text-slate-500">{d.name}: {d.value.toLocaleString()}</p>)}</div>)}
                           </div>
-                          <p className="text-sm text-slate-800 mt-1">ทั้งหมด: <span className="font-semibold">{item.total.toLocaleString()}</span> งาน</p>
-                          {item.openJobs !== undefined && (
-                            <p className="text-sm text-slate-800">เปิดอยู่: <span className="font-semibold">{item.openJobs.toLocaleString()}</span> งาน</p>
-                          )}
-                          {details.length > 0 && (
-                            <div className="mt-1.5 pt-1.5 border-t border-slate-100 space-y-0.5">
-                              <p className="text-xs font-medium text-slate-600">ประกอบด้วย:</p>
-                              {details.map((d, i) => (
-                                <p key={i} className="text-xs text-slate-500">{d.name}: {d.value.toLocaleString()}</p>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+                        );
+                      }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div style={{ fontSize: 10, lineHeight: '16px' }}>
+                  {(() => {
+                    const total = groupedChannelData.reduce((s, d) => s + (d.total as number), 0);
+                    return [...groupedChannelData].sort((a, b) => (b.total as number) - (a.total as number)).map((item, i) => {
+                      const pct = total > 0 ? (((item.total as number) / total) * 100).toFixed(0) : 0;
+                      return <LegendItem key={i} color={item.color as string} label={`${item.channel as string} ${(item.total as number).toLocaleString()} (${pct}%)`} isOther={(item as any)._isOther} groupKey={(item as any)._groupKey} />;
+                    });
+                  })()}
+                </div>
+              </div>
             </div>
+
+            <hr className="border-slate-100" />
+
+            {/* Urgent Pie */}
+            <div className="flex-1 min-h-0">
+              {(() => {
+                const urgentData = data.urgentDistribution.map(d => ({ ...d, value: d.total }));
+                const totalUrgent = urgentData.reduce((s, d) => s + d.value, 0);
+                return (
+                  <>
+                    <h3 className="font-semibold text-slate-800 text-xs mb-0">งานเร่งด่วน <span className="font-normal text-slate-400">({totalUrgent.toLocaleString()} งาน)</span></h3>
+                    <div className="flex items-center gap-3" style={{ height: 90 }}>
+                      <div style={{ width: 90, minWidth: 90, height: 90 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie data={urgentData} cx="50%" cy="50%" innerRadius={15} outerRadius={35} paddingAngle={2} dataKey="value">
+                              {urgentData.map((entry, i) => <Cell key={`urg-${i}`} fill={entry.color} />)}
+                            </Pie>
+                            <Tooltip content={({ active, payload }) => {
+                              if (!active || !payload?.length) return null;
+                              const d = payload[0].payload;
+                              return (
+                                <div className="bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-lg">
+                                  <p className="text-sm font-medium text-slate-700">{d.label}</p>
+                                  <p className="text-sm text-slate-800">ทั้งหมด: <span className="font-semibold">{d.value.toLocaleString()}</span></p>
+                                  <p className="text-xs text-amber-600">เปิดอยู่: {d.openJobs.toLocaleString()}</p>
+                                  <p className="text-xs text-emerald-600">ปิดแล้ว: {d.closedJobs.toLocaleString()}</p>
+                                </div>
+                              );
+                            }} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div style={{ fontSize: 10, lineHeight: '16px' }}>
+                        {urgentData.map((item, i) => {
+                          const pct = totalUrgent > 0 ? ((item.value / totalUrgent) * 100).toFixed(0) : 0;
+                          return (<div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}><span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, backgroundColor: item.color, flexShrink: 0 }} /><span>{item.label} {item.value.toLocaleString()} ({pct}%)</span></div>);
+                        })}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+
           </div>
 
           {/* Trend Chart - Stacked Bar + Cumulative Backlog Line */}
           <div className="card lg:col-span-4">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h3 className="font-semibold text-slate-800">เปรียบเทียบปริมาณงาน และการปิดงาน</h3>
-                <p className="text-sm text-slate-500">งานเปิดใหม่ / งานคงค้าง / งานปิด รายเดือน + เส้นคงค้างสะสม</p>
+                <h3 className="font-semibold text-slate-800">เปรียบเทียบงานเปิด / งานปิด รายเดือน</h3>
+                <p className="text-sm text-slate-500">Grouped bar: งานเปิด vs งานปิด + เส้นคงค้างสะสม (13 เดือนล่าสุด)</p>
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={280}>
+            <ResponsiveContainer width="100%" height={350}>
               <ComposedChart
                 data={(() => {
-                  // Generate last 12 months
+                  // Generate last 13 months
                   const thaiMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
                   const now = new Date();
 
-                  // Build a set of the 12 display month labels
+                  // Build a set of the 13 display month labels (11 past + current + 1 future)
                   const displayLabels = new Set<string>();
-                  for (let i = 11; i >= 0; i--) {
+                  for (let i = 11; i >= -1; i--) {
                     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
                     displayLabels.add(thaiMonths[d.getMonth()] + ' ' + String(d.getFullYear()).slice(2));
                   }
 
-                  // Compute cumulative backlog from ALL months before the display window
-                  // + jobs with NULL open_date (not in trend at all)
+                  // Closed by month lookup
+                  const closedByMonthMap = new Map<string, number>();
+                  for (const ct of (data.closedTrend || [])) {
+                    closedByMonthMap.set(ct.month, ct.closed);
+                  }
+
+                  // Parse filter range
+                  const fromYM = currentFilters.dateFrom || '';
+                  const toYM = currentFilters.dateTo || '';
+
+                  // Build 13 months (11 past + current + 1 future)
+                  const months: { label: string; opened: number; closed: number; inRange: boolean }[] = [];
+                  for (let i = 11; i >= -1; i--) {
+                    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                    const label = thaiMonths[d.getMonth()] + ' ' + String(d.getFullYear()).slice(2);
+                    const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                    const inRange = (!fromYM || ym >= fromYM) && (!toYM || ym <= toYM);
+                    const matched = data.trend.find(t => t.month === label);
+                    months.push({
+                      label,
+                      opened: matched?.total ?? 0,
+                      closed: closedByMonthMap.get(label) || 0,
+                      inRange,
+                    });
+                  }
+
+                  // Cumulative backlog: use trend's own completed count (same open_date grouping)
+                  // so that total - completed = still open, and final cumBacklog = openJobs KPI
+                  const trendCompletedMap = new Map<string, number>();
+                  for (const t of data.trend) {
+                    trendCompletedMap.set(t.month, t.completed);
+                  }
+
                   let cumBacklog = data.nullDateOpenJobs || 0;
                   for (const t of data.trend) {
                     if (!displayLabels.has(t.month)) {
@@ -630,43 +608,20 @@ export function QualityOverviewPage() {
                     }
                   }
 
-                  // Build the 12 display months
-                  const months: { month: string; total: number; completed: number }[] = [];
-                  for (let i = 11; i >= 0; i--) {
-                    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-                    const label = thaiMonths[d.getMonth()] + ' ' + String(d.getFullYear()).slice(2);
-                    const matched = data.trend.find(t => t.month === label);
-                    months.push({
-                      month: label,
-                      total: matched?.total ?? 0,
-                      completed: matched?.completed ?? 0,
-                    });
-                  }
-
-                  let prevTotal = 0;
-                  return months.map((t, i) => {
-                    const newJobs = t.total;
-                    const closed = t.completed;
-                    const backlog = newJobs - closed;
-                    cumBacklog += backlog;
-                    const delta = i === 0 ? 0 : newJobs - prevTotal;
-                    const deltaPct = i === 0 || prevTotal === 0 ? 0 : Math.round((delta / prevTotal) * 100);
-                    prevTotal = newJobs;
-                    const deltaSign = delta > 0 ? '+' : '';
+                  return months.map(m => {
+                    const trendCompleted = trendCompletedMap.get(m.label) || 0;
+                    const opened = m.opened; // total jobs opened this month
+                    cumBacklog += opened - trendCompleted;
                     return {
-                      month: t.month,
-                      งานเปิดใหม่: newJobs,
-                      งานคงค้าง: backlog > 0 ? backlog : 0,
-                      งานปิด: closed,
+                      month: m.label,
+                      งานเปิด: m.opened,
+                      งานปิด: m.closed, // still show closedTrend for the bar (actual close month)
                       คงค้างสะสม: cumBacklog,
-                      _delta: delta,
-                      _deltaPct: deltaPct,
-                      _isFirst: i === 0,
-                      _deltaLabel: i === 0 ? '' : `${deltaSign}${delta.toLocaleString()} (${deltaSign}${deltaPct}%)`,
+                      inRange: m.inRange,
                     };
                   });
                 })()}
-                margin={{ top: 20, right: 30, left: 0, bottom: 0 }}
+                margin={{ top: 20, right: 50, left: 0, bottom: 0 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="month" stroke="#64748b" fontSize={12} />
@@ -676,69 +631,80 @@ export function QualityOverviewPage() {
                   content={({ active, payload, label }) => {
                     if (!active || !payload?.length) return null;
                     const d = payload[0]?.payload;
+                    const diff = (d?.งานเปิด ?? 0) - (d?.งานปิด ?? 0);
                     return (
                       <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-lg">
                         <p className="font-medium text-slate-800 mb-2">{label}</p>
                         <div className="space-y-1 text-sm">
                           <div className="flex items-center gap-2">
                             <div className="w-3 h-3 rounded bg-blue-500" />
-                            <span className="text-slate-600">งานเปิดใหม่:</span>
-                            <span className="font-medium">{d.งานเปิดใหม่?.toLocaleString()}</span>
-                            {!d._isFirst && (
-                              <span className={`text-xs font-semibold ${d._delta > 0 ? 'text-red-500' : d._delta < 0 ? 'text-green-500' : 'text-slate-400'}`}>
-                                ({d._delta > 0 ? '+' : ''}{d._delta.toLocaleString()}, {d._delta > 0 ? '+' : ''}{d._deltaPct}%)
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded bg-amber-500" />
-                            <span className="text-slate-600">งานคงค้าง:</span>
-                            <span className="font-medium">{d.งานคงค้าง?.toLocaleString()}</span>
+                            <span className="text-slate-600">งานเปิด:</span>
+                            <span className="font-medium">{d?.งานเปิด?.toLocaleString()}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <div className="w-3 h-3 rounded bg-emerald-500" />
                             <span className="text-slate-600">งานปิด:</span>
-                            <span className="font-medium">{d.งานปิด?.toLocaleString()}</span>
+                            <span className="font-medium">{d?.งานปิด?.toLocaleString()}</span>
                           </div>
                           <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                            <span className="text-slate-600">ผลต่าง:</span>
+                            <span className={`font-semibold ${diff > 0 ? 'text-red-500' : diff < 0 ? 'text-emerald-500' : 'text-slate-500'}`}>
+                              {diff > 0 ? '+' : ''}{diff.toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
                             <div className="w-3 h-0.5 bg-red-500 rounded" />
                             <span className="text-slate-600">คงค้างสะสม:</span>
-                            <span className="font-semibold text-red-600">{d.คงค้างสะสม?.toLocaleString()}</span>
+                            <span className="font-semibold text-red-600">{d?.คงค้างสะสม?.toLocaleString()}</span>
                           </div>
                         </div>
                       </div>
                     );
                   }}
                 />
-                <Bar yAxisId="left" dataKey="งานเปิดใหม่" stackId="a" fill="#3b82f6" radius={[0, 0, 0, 0]}>
-                  <LabelList dataKey="งานเปิดใหม่" position="center" fontSize={10} fill="#fff" fontWeight={600} formatter={(v: number) => v > 0 ? v.toLocaleString() : ''} />
+                <Bar yAxisId="left" dataKey="งานเปิด" radius={[4, 4, 0, 0]} barSize={32}>
+                  {(() => {
+                    const n = new Date();
+                    const f = currentFilters.dateFrom || '';
+                    const t = currentFilters.dateTo || '';
+                    return Array.from({ length: 13 }, (_, idx) => {
+                      const d = new Date(n.getFullYear(), n.getMonth() - (11 - idx), 1);
+                      const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                      const inR = (!f || ym >= f) && (!t || ym <= t);
+                      return <Cell key={idx} fill={inR ? '#3b82f6' : '#cbd5e1'} />;
+                    });
+                  })()}
+                  <LabelList dataKey="งานเปิด" position="top" fontSize={10} fill="#3b82f6" fontWeight={600} formatter={(v) => Number(v) > 0 ? Number(v).toLocaleString() : ''} />
                 </Bar>
-                <Bar yAxisId="left" dataKey="งานคงค้าง" stackId="a" fill="#f59e0b" radius={[0, 0, 0, 0]}>
-                  <LabelList dataKey="งานคงค้าง" position="center" fontSize={10} fill="#fff" fontWeight={600} formatter={(v: number) => v > 0 ? v.toLocaleString() : ''} />
-                </Bar>
-                <Bar yAxisId="left" dataKey="งานปิด" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]}>
-                  <LabelList dataKey="งานปิด" position="center" fontSize={10} fill="#fff" fontWeight={600} formatter={(v: number) => v > 0 ? v.toLocaleString() : ''} />
-                  <LabelList dataKey="_deltaLabel" position="top" fontSize={9} fontWeight={600} fill="#64748b" formatter={(v: string) => v || ''} />
+                <Bar yAxisId="left" dataKey="งานปิด" radius={[4, 4, 0, 0]} barSize={32}>
+                  {(() => {
+                    const n = new Date();
+                    const f = currentFilters.dateFrom || '';
+                    const t = currentFilters.dateTo || '';
+                    return Array.from({ length: 13 }, (_, idx) => {
+                      const d = new Date(n.getFullYear(), n.getMonth() - (11 - idx), 1);
+                      const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                      const inR = (!f || ym >= f) && (!t || ym <= t);
+                      return <Cell key={idx} fill={inR ? '#10b981' : '#d1d5db'} />;
+                    });
+                  })()}
+                  <LabelList dataKey="งานปิด" position="top" fontSize={10} fill="#10b981" fontWeight={600} formatter={(v) => Number(v) > 0 ? Number(v).toLocaleString() : ''} />
                 </Bar>
                 <Line
                   yAxisId="right"
-                  type="monotone"
+                  type="linear"
                   dataKey="คงค้างสะสม"
                   stroke="#ef4444"
                   strokeWidth={2.5}
                   dot={{ r: 3, fill: '#ef4444' }}
-                  label={{ position: 'top', fontSize: 10, fill: '#ef4444', fontWeight: 600, formatter: (v: number) => v.toLocaleString() }}
+                  label={{ position: 'top', fontSize: 10, fill: '#ef4444', fontWeight: 600, formatter: (v) => Number(v).toLocaleString() }}
                 />
               </ComposedChart>
             </ResponsiveContainer>
             <div className="flex justify-center gap-6 mt-2">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-blue-500 rounded" />
-                <span className="text-sm text-slate-600">งานเปิดใหม่</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-amber-500 rounded" />
-                <span className="text-sm text-slate-600">งานคงค้าง</span>
+                <span className="text-sm text-slate-600">งานเปิด</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-emerald-500 rounded" />
@@ -751,7 +717,6 @@ export function QualityOverviewPage() {
             </div>
           </div>
         </div>
-
 
         {/* Open Jobs by Category - Top 10 */}
         <div className="card mb-8">
@@ -895,10 +860,11 @@ export function QualityOverviewPage() {
                   fontSize={11}
                   fill="#64748b"
                   fontWeight={600}
-                  formatter={(v: number) => {
+                  formatter={(v) => {
+                    const n = Number(v);
                     const total = data.openJobsByCategory.reduce((s, d) => s + d.totalJobs, 0);
-                    const pct = total > 0 ? ((v / total) * 100).toFixed(1) : '0';
-                    return `${v.toLocaleString()} (${pct}%)`;
+                    const pct = total > 0 ? ((n / total) * 100).toFixed(1) : '0';
+                    return `${n.toLocaleString()} (${pct}%)`;
                   }}
                 />
               </Bar>
@@ -924,16 +890,22 @@ export function QualityOverviewPage() {
                     data={(() => {
                       const thaiMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
                       const now = new Date();
-                      const months: { month: string; total: number; completed: number; openJobs: number }[] = [];
+                      // Parse filter range to YYYY-MM for comparison
+                      const fromYM = currentFilters.dateFrom || '';
+                      const toYM = currentFilters.dateTo || '';
+                      const months: { month: string; total: number; completed: number; openJobs: number; inRange: boolean }[] = [];
                       for (let i = 11; i >= 0; i--) {
                         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
                         const label = thaiMonths[d.getMonth()] + ' ' + String(d.getFullYear()).slice(2);
+                        const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                        const inRange = (!fromYM || ym >= fromYM) && (!toYM || ym <= toYM);
                         const matched = categoryTrend.find(t => t.month === label);
                         months.push({
                           month: label,
                           total: matched?.total ?? 0,
                           completed: matched?.completed ?? 0,
                           openJobs: matched?.openJobs ?? 0,
+                          inRange,
                         });
                       }
                       return months;
@@ -957,7 +929,19 @@ export function QualityOverviewPage() {
                         );
                       }}
                     />
-                    <Bar dataKey="total" fill="#3b82f6" radius={[4, 4, 0, 0]} name="งานทั้งหมด">
+                    <Bar dataKey="total" radius={[4, 4, 0, 0]} name="งานทั้งหมด">
+                      {(() => {
+                        const now2 = new Date();
+                        const fromYM2 = currentFilters.dateFrom || '';
+                        const toYM2 = currentFilters.dateTo || '';
+                        return Array.from({ length: 12 }, (_, idx) => {
+                          const d = new Date(now2.getFullYear(), now2.getMonth() - (11 - idx), 1);
+                          const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                          const inRange = (!fromYM2 || ym >= fromYM2) && (!toYM2 || ym <= toYM2);
+                          const catColor = selectedCategory ? (data.openJobsByCategory.find(c => c.category === selectedCategory)?.color || '#3b82f6') : '#3b82f6';
+                        return <Cell key={idx} fill={inRange ? catColor : '#cbd5e1'} />;
+                        });
+                      })()}
                       <LabelList dataKey="total" position="top" fontSize={10} fill="#64748b" offset={10} formatter={(v: any) => v > 0 ? Number(v).toLocaleString() : ''} />
                     </Bar>
                     <Line type="monotone" dataKey="completed" stroke="#22c55e" strokeWidth={2} dot={{ r: 3, fill: '#22c55e' }} name="ปิดแล้ว" />
@@ -967,7 +951,7 @@ export function QualityOverviewPage() {
               )}
               <div className="flex justify-center gap-6 mt-2">
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-blue-500 rounded" />
+                  <div className="w-3 h-3 rounded" style={{ backgroundColor: selectedCategory ? (data.openJobsByCategory.find(c => c.category === selectedCategory)?.color || '#3b82f6') : '#3b82f6' }} />
                   <span className="text-sm text-slate-600">งานทั้งหมด</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -983,197 +967,93 @@ export function QualityOverviewPage() {
           )}
         </div>
 
-        {/* Defect by Project Section */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-800">Defect รายโครงการ</h3>
-              <p className="text-sm text-slate-500">ติดตาม Defect และงานค้างแต่ละโครงการ ({data.projectDefects.length} โครงการ)</p>
-            </div>
-            <div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1">
-              <button
-                onClick={() => setDefectViewMode('status')}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                  defectViewMode === 'status'
-                    ? 'bg-white text-slate-800 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-800'
-                }`}
-              >
-                ตามสถานะ
-              </button>
-              <button
-                onClick={() => setDefectViewMode('category')}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                  defectViewMode === 'category'
-                    ? 'bg-white text-slate-800 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-800'
-                }`}
-              >
-                ตามประเภทซ่อม
-              </button>
-            </div>
+        {/* Monthly SLA Breakdown Table */}
+        <div className="card mb-8">
+          <div className="mb-4">
+            <h3 className="font-semibold text-slate-800">งานค้างรายเดือน แยกตาม SLA Range</h3>
+            <p className="text-sm text-slate-500">จำนวนงานที่ยังเปิดอยู่ จำแนกตามเดือนที่เปิดงานและช่วงอายุงาน</p>
           </div>
-
-          {/* Status View */}
-          {defectViewMode === 'status' && (
-          <>
-          <div className="card mb-6">
-            <h4 className="font-medium text-slate-700 mb-4">สัดส่วน Defect รายโครงการ (%)</h4>
-            <ResponsiveContainer width="100%" height={Math.max(400, Math.min(data.projectDefects.length, 20) * 28)}>
-              <BarChart
-                data={[...data.projectDefects].slice(0, 20).sort((a, b) => b.openDefects - a.openDefects).map(p => {
-                  const total = p.totalDefects;
-                  const completed = p.totalDefects - p.openDefects;
-                  const openUnder14 = p.openDefects - p.defectsOver14Days;
-                  const over14Days = p.defectsOver14Days;
-                  const completedPct = Math.floor((completed / total) * 100);
-                  const openUnder14Pct = Math.floor((openUnder14 / total) * 100);
-                  const over14DaysPct = Math.max(0, 100 - completedPct - openUnder14Pct);
-                  return {
-                    name: p.projectName?.replace(/^เสนา\s*/, '') || p.projectId,
-                    completedPct,
-                    openUnder14Pct,
-                    over14DaysPct,
-                    completed,
-                    openUnder14,
-                    over14Days,
-                    total,
-                    openDefects: p.openDefects,
-                  };
-                })}
-                layout="vertical"
-                margin={{ top: 5, right: 80, left: 10, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}%`} />
-                <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={180} />
-                <Tooltip
-                  content={({ active, payload, label }) => {
-                    if (!active || !payload?.length) return null;
-                    const d = payload[0]?.payload;
-                    return (
-                      <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-lg">
-                        <p className="font-medium text-slate-800 mb-2">{label}</p>
-                        <div className="space-y-1 text-sm">
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded bg-green-500" />
-                            <span className="text-slate-600">เสร็จแล้ว:</span>
-                            <span className="font-medium">{d.completedPct}% ({d.completed.toLocaleString()} งาน)</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded bg-amber-500" />
-                            <span className="text-slate-600">เปิดอยู่ &lt; 14 วัน:</span>
-                            <span className="font-medium">{d.openUnder14Pct}% ({d.openUnder14.toLocaleString()} งาน)</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded bg-red-500" />
-                            <span className="text-slate-600">ค้าง &gt; 14 วัน:</span>
-                            <span className="font-medium">{d.over14DaysPct}% ({d.over14Days.toLocaleString()} งาน)</span>
-                          </div>
-                          <div className="pt-2 mt-2 border-t border-slate-100">
-                            <span className="text-slate-500">รวม: </span>
-                            <span className="font-semibold text-slate-800">{d.total.toLocaleString()} งาน</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  }}
-                />
-                <Legend
-                  payload={[
-                    { value: 'เสร็จแล้ว', type: 'square', color: '#22c55e' },
-                    { value: 'เปิดอยู่ < 14 วัน', type: 'square', color: '#f59e0b' },
-                    { value: 'ค้าง > 14 วัน', type: 'square', color: '#ef4444' },
-                  ]}
-                />
-                <Bar dataKey="completedPct" name="เสร็จแล้ว" stackId="a" fill="#22c55e" />
-                <Bar dataKey="openUnder14Pct" name="เปิดอยู่ < 14 วัน" stackId="a" fill="#f59e0b" />
-                <Bar dataKey="over14DaysPct" name="ค้าง > 14 วัน" stackId="a" fill="#ef4444" radius={[0, 4, 4, 0]}>
-                  <LabelList
-                    dataKey="openDefects"
-                    position="right"
-                    fontSize={11}
-                    fill="#f59e0b"
-                    fontWeight={600}
-                  />
-                  <LabelList
-                    dataKey="total"
-                    position="right"
-                    fontSize={11}
-                    fill="#64748b"
-                    fontWeight={500}
-                    offset={35}
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Project Table */}
-          <div className="card overflow-hidden">
-            <div className="max-h-[500px] overflow-y-auto">
-            <table className="min-w-full">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="text-left py-3 px-4 text-sm font-semibold text-slate-700">โครงการ</th>
-                  <th className="text-center py-3 px-4 text-sm font-semibold text-slate-700">Defect ทั้งหมด</th>
-                  <th className="text-center py-3 px-4 text-sm font-semibold text-slate-700">เปิดอยู่</th>
-                  <th className="text-center py-3 px-4 text-sm font-semibold text-slate-700">ค้าง &gt; 14 วัน</th>
-                  <th className="text-center py-3 px-4 text-sm font-semibold text-slate-700">เวลาเฉลี่ย</th>
-                  <th className="text-center py-3 px-4 text-sm font-semibold text-slate-700">Completion</th>
-                  <th className="text-center py-3 px-4 text-sm font-semibold text-slate-700">สถานะ</th>
+                <tr className="border-b-2 border-slate-200 bg-slate-50">
+                  <th className="text-left px-3 py-2 text-xs font-semibold text-slate-600">เดือน</th>
+                  <th className="text-center px-3 py-2 text-xs font-semibold text-blue-500">&lt;30 วัน</th>
+                  <th className="text-center px-3 py-2 text-xs font-semibold text-amber-500">30-45 วัน</th>
+                  <th className="text-center px-3 py-2 text-xs font-semibold text-orange-500">45-60 วัน</th>
+                  <th className="text-center px-3 py-2 text-xs font-semibold text-red-500">&gt;60 วัน</th>
+                  <th className="text-center px-3 py-2 text-xs font-semibold text-slate-700">รวม</th>
                 </tr>
               </thead>
               <tbody>
-                {[...data.projectDefects].sort((a, b) => b.openDefects - a.openDefects).map((project, index) => (
-                  <ProjectDefectRow key={project.projectId} project={project} isLast={index === data.projectDefects.length - 1} />
-                ))}
+                {(() => {
+                  const thaiMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+                  const now = new Date();
+                  const monthLabels: string[] = [];
+                  for (let i = 11; i >= -1; i--) {
+                    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                    monthLabels.push(thaiMonths[d.getMonth()] + ' ' + String(d.getFullYear()).slice(2));
+                  }
+                  const lookup = new Map((data.monthlySlaBreakdown || []).map(r => [r.month, r]));
+                  const totals = { under30: 0, d30to45: 0, d45to60: 0, over60: 0, total: 0 };
+
+                  const rows = monthLabels.map((label) => {
+                    const r = lookup.get(label);
+                    if (r) {
+                      totals.under30 += r.under30;
+                      totals.d30to45 += r.d30to45;
+                      totals.d45to60 += r.d45to60;
+                      totals.over60 += r.over60;
+                      totals.total += r.total;
+                    }
+                    return (
+                      <tr key={label} className="border-b border-slate-100 hover:bg-slate-50">
+                        <td className="px-3 py-2 font-medium text-slate-700">{label}</td>
+                        <td className="text-center px-3 py-2">
+                          <span className={r?.under30 ? 'font-bold text-blue-500' : 'text-slate-300'}>
+                            {(r?.under30 ?? 0).toLocaleString()}
+                          </span>
+                        </td>
+                        <td className="text-center px-3 py-2">
+                          <span className={r?.d30to45 ? 'font-bold text-amber-500' : 'text-slate-300'}>
+                            {(r?.d30to45 ?? 0).toLocaleString()}
+                          </span>
+                        </td>
+                        <td className="text-center px-3 py-2">
+                          <span className={r?.d45to60 ? 'font-bold text-orange-500' : 'text-slate-300'}>
+                            {(r?.d45to60 ?? 0).toLocaleString()}
+                          </span>
+                        </td>
+                        <td className="text-center px-3 py-2">
+                          <span className={r?.over60 ? 'font-bold text-red-600' : 'text-slate-300'}>
+                            {(r?.over60 ?? 0).toLocaleString()}
+                          </span>
+                        </td>
+                        <td className="text-center px-3 py-2">
+                          <span className={r?.total ? 'font-bold text-slate-700' : 'text-slate-300'}>
+                            {(r?.total ?? 0).toLocaleString()}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  });
+
+                  rows.push(
+                    <tr key="total" className="border-t-2 border-slate-300 bg-slate-50 font-bold">
+                      <td className="px-3 py-2 text-slate-800">รวม</td>
+                      <td className="text-center px-3 py-2 text-blue-600">{totals.under30.toLocaleString()}</td>
+                      <td className="text-center px-3 py-2 text-amber-600">{totals.d30to45.toLocaleString()}</td>
+                      <td className="text-center px-3 py-2 text-orange-600">{totals.d45to60.toLocaleString()}</td>
+                      <td className="text-center px-3 py-2 text-red-600">{totals.over60.toLocaleString()}</td>
+                      <td className="text-center px-3 py-2 text-slate-800">{totals.total.toLocaleString()}</td>
+                    </tr>
+                  );
+
+                  return rows;
+                })()}
               </tbody>
             </table>
-            </div>
           </div>
-          </>
-          )}
-
-          {/* Category View */}
-          {defectViewMode === 'category' && (
-          <div className="card mb-6">
-            <h4 className="font-medium text-slate-700 mb-4">งานเปิดตามประเภทซ่อม รายโครงการ</h4>
-            <ResponsiveContainer width="100%" height={Math.max(400, projectCategoryData.length * 28)}>
-              <BarChart
-                data={projectCategoryData}
-                layout="vertical"
-                margin={{ top: 5, right: 80, left: 10, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis type="number" tick={{ fontSize: 11 }} />
-                <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={180} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#fff',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '8px',
-                  }}
-                />
-                <Legend />
-                {topCategories.map((cat, i) => (
-                  <Bar
-                    key={cat}
-                    dataKey={cat}
-                    name={cat}
-                    stackId="a"
-                    fill={categoryBarColors[i % categoryBarColors.length]}
-                  />
-                ))}
-                {projectCategoryData.some((d) => (d as Record<string, unknown>)['อื่นๆ']) && (
-                  <Bar dataKey="อื่นๆ" name="อื่นๆ" stackId="a" fill="#9ca3af" radius={[0, 4, 4, 0]}>
-                    <LabelList dataKey="total" position="right" fontSize={11} fill="#64748b" fontWeight={600} />
-                  </Bar>
-                )}
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          )}
         </div>
 
         {/* Quick Links */}
@@ -1183,7 +1063,19 @@ export function QualityOverviewPage() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <QuickLinkCard
-            title="รายการงานทั้งหมด"
+            title="Project Overview"
+            description="ติดตาม Defect และงานค้างแต่ละโครงการ"
+            href="/quality/project-overview"
+            icon={Building2}
+          />
+          <QuickLinkCard
+            title="Category by Project"
+            description="เปรียบเทียบสัดส่วนประเภทซ่อมแต่ละโครงการ"
+            href="/quality/category-by-project"
+            icon={TrendingUp}
+          />
+          <QuickLinkCard
+            title="All Requests"
             description="ดูและจัดการคำร้องแจ้งซ่อม / ร้องเรียน"
             href="/quality/requests"
             icon={FileText}
@@ -1197,10 +1089,10 @@ export function QualityOverviewPage() {
             count={data.kpis.jobsOver14Days}
           />
           <QuickLinkCard
-            title="งานหลุด / เคสพิเศษ"
-            description="จัดการงานที่ต้องติดตามเป็นพิเศษ"
-            href="/quality/exception"
-            icon={AlertTriangle}
+            title="Settings"
+            description="จัดการ Sync โครงการและตั้งค่าระบบ"
+            href="/quality/settings"
+            icon={Settings}
           />
         </div>
       </div>
