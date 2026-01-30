@@ -139,7 +139,7 @@ export function ByResponsiblePage() {
                 <Clock className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-xs text-slate-500">งานเปิดอยู่ทั้งหมด</p>
+                <p className="text-xs text-slate-500">กำลังดำเนินการทั้งหมด</p>
                 <p className="text-2xl font-bold text-amber-600">{totalOpen.toLocaleString()}</p>
               </div>
             </div>
@@ -349,7 +349,7 @@ function TrackingCard({
       <div className="grid grid-cols-2 gap-3 mb-4">
         <div className="bg-slate-50 rounded-xl p-3 text-center">
           <p className="text-3xl font-bold text-slate-800">{stats.openJobs.toLocaleString()}</p>
-          <p className="text-xs text-slate-500 mt-1">งานเปิดอยู่</p>
+          <p className="text-xs text-slate-500 mt-1">กำลังดำเนินการ</p>
         </div>
         <div className={`rounded-xl p-3 text-center ${hasUrgent ? 'bg-red-50' : 'bg-green-50'}`}>
           <p className={`text-3xl font-bold ${hasUrgent ? 'text-red-600' : 'text-green-600'}`}>

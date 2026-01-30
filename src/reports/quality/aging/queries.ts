@@ -42,9 +42,11 @@ export interface AgingFilters {
   projectId?: string;
   projectType?: string;
   category?: string;
+  workArea?: string;
   dateFrom?: string;
   dateTo?: string;
   jobFilter?: JobFilter;
+  courtesyOnly?: boolean;
   bucket?: '0-30' | '31-45' | '46-60' | '61-120' | '120+';
   search?: string;
   sortBy?: AgingSortField;
@@ -103,9 +105,11 @@ export async function fetchAgingData(filters: AgingFilters = {}): Promise<AgingD
   if (filters.projectId) params.set('project_id', filters.projectId);
   if (filters.projectType) params.set('project_type', filters.projectType);
   if (filters.category) params.set('category', filters.category);
+  if (filters.workArea) params.set('work_area', filters.workArea);
   if (filters.dateFrom) params.set('date_from', filters.dateFrom);
   if (filters.dateTo) params.set('date_to', filters.dateTo);
   if (filters.jobFilter) params.set('job_filter', filters.jobFilter);
+  if (filters.courtesyOnly) params.set('courtesy_only', '1');
   if (filters.bucket) params.set('bucket', filters.bucket);
   if (filters.search) params.set('search', filters.search);
   if (filters.sortBy) params.set('sort_by', filters.sortBy);

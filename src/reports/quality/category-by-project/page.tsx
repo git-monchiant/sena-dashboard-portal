@@ -88,7 +88,7 @@ export function CategoryByProjectPage() {
       <div className="p-8">
         {fromPage && (
           <div className="flex items-center gap-3 mb-4">
-            <button onClick={() => navigate('/quality')} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+            <button onClick={() => navigate('/quality')} className="p-2 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer">
               <ArrowLeft className="w-5 h-5 text-slate-600" />
             </button>
             <span className="text-sm text-slate-500">กลับไป Overview</span>
@@ -109,10 +109,10 @@ export function CategoryByProjectPage() {
 
         {/* KPI Cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-          <KPICard title="งานทั้งหมด" value={data.kpis.totalJobs.toLocaleString()} change={`${data.kpis.distinctProjects?.toLocaleString() ?? 0} โครงการ`} showArrow={false} subtext={`${data.kpis.distinctUnits?.toLocaleString() ?? 0} ยูนิต`} icon={Wrench} color="blue" />
-          <KPICard title="เสร็จสิ้น" value={(data.kpis.totalJobs - data.kpis.openJobs - (data.kpis.cancelledJobs || 0)).toLocaleString()} change={`${(data.kpis.totalJobs > 0 ? (((data.kpis.totalJobs - data.kpis.openJobs - (data.kpis.cancelledJobs || 0)) / data.kpis.totalJobs) * 100).toFixed(1) : 0)}%`} showArrow={false} subtext={`${data.kpis.closedUnits?.toLocaleString() ?? 0} ยูนิต`} icon={CheckCircle} color="emerald" />
-          <KPICard title="ยกเลิก" value={(data.kpis.cancelledJobs || 0).toLocaleString()} change={`${(data.kpis.totalJobs > 0 ? (((data.kpis.cancelledJobs || 0) / data.kpis.totalJobs) * 100).toFixed(1) : 0)}%`} showArrow={false} subtext={`${(data.kpis.cancelledUnits || 0).toLocaleString()} ยูนิต`} icon={XCircle} color="red" />
-          <KPICard title="งานเปิดอยู่" value={data.kpis.openJobs.toLocaleString()} change={`${(data.kpis.totalJobs > 0 ? ((data.kpis.openJobs / data.kpis.totalJobs) * 100).toFixed(1) : 0)}%`} showArrow={false} subtext={`${data.kpis.openUnits?.toLocaleString() ?? 0} ยูนิต`} icon={Clock} color="amber" />
+          <KPICard title="งานทั้งหมด" value={data.kpis.totalJobs.toLocaleString()} change={`${data.kpis.distinctProjects?.toLocaleString() ?? 0} โครงการ`} showArrow={false} subtext={`${data.kpis.distinctUnits?.toLocaleString() ?? 0} ยูนิต`} icon={Wrench} color="blue" onClick={() => navigate('/quality/requests', { state: { jobFilter: 'all', fromPage: true, backTo: '/quality/category-by-project', backLabel: 'กลับไป Category by Project' } })} />
+          <KPICard title="เสร็จสิ้น" value={(data.kpis.totalJobs - data.kpis.openJobs - (data.kpis.cancelledJobs || 0)).toLocaleString()} change={`${(data.kpis.totalJobs > 0 ? (((data.kpis.totalJobs - data.kpis.openJobs - (data.kpis.cancelledJobs || 0)) / data.kpis.totalJobs) * 100).toFixed(1) : 0)}%`} showArrow={false} subtext={`${data.kpis.closedUnits?.toLocaleString() ?? 0} ยูนิต`} icon={CheckCircle} color="emerald" onClick={() => navigate('/quality/requests', { state: { jobFilter: 'closed', fromPage: true, backTo: '/quality/category-by-project', backLabel: 'กลับไป Category by Project' } })} />
+          <KPICard title="ยกเลิก" value={(data.kpis.cancelledJobs || 0).toLocaleString()} change={`${(data.kpis.totalJobs > 0 ? (((data.kpis.cancelledJobs || 0) / data.kpis.totalJobs) * 100).toFixed(1) : 0)}%`} showArrow={false} subtext={`${(data.kpis.cancelledUnits || 0).toLocaleString()} ยูนิต`} icon={XCircle} color="red" onClick={() => navigate('/quality/requests', { state: { jobFilter: 'cancelled', fromPage: true, backTo: '/quality/category-by-project', backLabel: 'กลับไป Category by Project' } })} />
+          <KPICard title="กำลังดำเนินการ" value={data.kpis.openJobs.toLocaleString()} change={`${(data.kpis.totalJobs > 0 ? ((data.kpis.openJobs / data.kpis.totalJobs) * 100).toFixed(1) : 0)}%`} showArrow={false} subtext={`${data.kpis.openUnits?.toLocaleString() ?? 0} ยูนิต`} icon={Clock} color="amber" onClick={() => navigate('/quality/aging', { state: { jobFilter: 'open', fromPage: true, backTo: '/quality/category-by-project', backLabel: 'กลับไป Category by Project' } })} />
           <KPICard title="เวลาเฉลี่ยปิดงาน" value={`${data.kpis.avgResolutionDays} วัน`} icon={TrendingUp} color="purple" />
           <KPICard title="Completion Rate" value={`${data.kpis.completionRate}%`} icon={CheckCircle} color="emerald" />
         </div>

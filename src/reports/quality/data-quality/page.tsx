@@ -39,7 +39,7 @@ export function DataQualityPage() {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <button onClick={() => navigate('/quality')} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+        <button onClick={() => navigate('/quality')} className="p-2 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer">
           <ArrowLeft className="w-5 h-5 text-slate-600" />
         </button>
         <div>
@@ -157,7 +157,7 @@ export function DataQualityPage() {
                 <th className="text-center py-3 px-4 text-sm font-semibold text-slate-700">ทั้งหมด</th>
                 <th className="text-center py-3 px-4 text-sm font-semibold text-slate-700">มีข้อมูล</th>
                 <th className="text-center py-3 px-4 text-sm font-semibold text-slate-700">NULL ทั้งหมด</th>
-                <th className="text-center py-3 px-4 text-sm font-semibold text-slate-700">NULL (งานเปิดอยู่)</th>
+                <th className="text-center py-3 px-4 text-sm font-semibold text-slate-700">NULL (กำลังดำเนินการ)</th>
                 <th className="text-center py-3 px-4 text-sm font-semibold text-slate-700">Fill Rate</th>
               </tr>
             </thead>

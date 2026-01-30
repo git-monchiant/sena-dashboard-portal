@@ -82,8 +82,8 @@ export function ProjectOverviewQualityPage() {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
           <KPICard title="งานทั้งหมด" value={data.kpis.totalJobs.toLocaleString()} change={`${data.kpis.distinctProjects?.toLocaleString() ?? 0} โครงการ`} showArrow={false} subtext={`${data.kpis.distinctUnits?.toLocaleString() ?? 0} ยูนิต`} icon={Wrench} color="blue" onClick={() => navigate('/quality/requests', { state: { jobFilter: 'all', fromPage: true, backTo: '/quality/project-overview', backLabel: 'กลับไป Project Overview' } })} />
           <KPICard title="เสร็จสิ้น" value={(data.kpis.totalJobs - data.kpis.openJobs - (data.kpis.cancelledJobs || 0)).toLocaleString()} change={`${(data.kpis.totalJobs > 0 ? (((data.kpis.totalJobs - data.kpis.openJobs - (data.kpis.cancelledJobs || 0)) / data.kpis.totalJobs) * 100).toFixed(1) : 0)}%`} showArrow={false} subtext={`${data.kpis.closedUnits?.toLocaleString() ?? 0} ยูนิต`} icon={CheckCircle} color="emerald" onClick={() => navigate('/quality/requests', { state: { jobFilter: 'closed', fromPage: true, backTo: '/quality/project-overview', backLabel: 'กลับไป Project Overview' } })} />
-          <KPICard title="ยกเลิก" value={(data.kpis.cancelledJobs || 0).toLocaleString()} change={`${(data.kpis.totalJobs > 0 ? (((data.kpis.cancelledJobs || 0) / data.kpis.totalJobs) * 100).toFixed(1) : 0)}%`} showArrow={false} subtext={`${(data.kpis.cancelledUnits || 0).toLocaleString()} ยูนิต`} icon={XCircle} color="red" />
-          <KPICard title="งานเปิดอยู่" value={data.kpis.openJobs.toLocaleString()} change={`${(data.kpis.totalJobs > 0 ? ((data.kpis.openJobs / data.kpis.totalJobs) * 100).toFixed(1) : 0)}%`} showArrow={false} subtext={`${data.kpis.openUnits?.toLocaleString() ?? 0} ยูนิต`} icon={Clock} color="amber" onClick={() => navigate('/quality/aging', { state: { jobFilter: 'open', fromPage: true, backTo: '/quality/project-overview', backLabel: 'กลับไป Project Overview' } })} />
+          <KPICard title="ยกเลิก" value={(data.kpis.cancelledJobs || 0).toLocaleString()} change={`${(data.kpis.totalJobs > 0 ? (((data.kpis.cancelledJobs || 0) / data.kpis.totalJobs) * 100).toFixed(1) : 0)}%`} showArrow={false} subtext={`${(data.kpis.cancelledUnits || 0).toLocaleString()} ยูนิต`} icon={XCircle} color="red" onClick={() => navigate('/quality/requests', { state: { jobFilter: 'cancelled', fromPage: true, backTo: '/quality/project-overview', backLabel: 'กลับไป Project Overview' } })} />
+          <KPICard title="กำลังดำเนินการ" value={data.kpis.openJobs.toLocaleString()} change={`${(data.kpis.totalJobs > 0 ? ((data.kpis.openJobs / data.kpis.totalJobs) * 100).toFixed(1) : 0)}%`} showArrow={false} subtext={`${data.kpis.openUnits?.toLocaleString() ?? 0} ยูนิต`} icon={Clock} color="amber" onClick={() => navigate('/quality/aging', { state: { jobFilter: 'open', fromPage: true, backTo: '/quality/project-overview', backLabel: 'กลับไป Project Overview' } })} />
           <KPICard title="เวลาเฉลี่ยปิดงาน" value={`${data.kpis.avgResolutionDays} วัน`} icon={TrendingUp} color="purple" />
           <KPICard title="Completion Rate" value={`${data.kpis.completionRate}%`} icon={CheckCircle} color="emerald" />
         </div>
@@ -91,7 +91,7 @@ export function ProjectOverviewQualityPage() {
         {/* Status View */}
         {(() => {
           const sortLabels: Record<string, string> = {
-            openDefects: 'งานเปิดอยู่',
+            openDefects: 'กำลังดำเนินการ',
             totalDefects: 'Defect ทั้งหมด',
             defectsOver30Days: 'ค้าง > 30 วัน',
             defectsOver45Days: 'ค้าง > 45 วัน',
@@ -129,7 +129,7 @@ export function ProjectOverviewQualityPage() {
                 <span className="text-sm text-slate-500">เรียงตาม</span>
                 <select value={defectSortBy} onChange={(e) => setDefectSortBy(e.target.value)}
                   className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
-                  <option value="openDefects">งานเปิดอยู่</option>
+                  <option value="openDefects">กำลังดำเนินการ</option>
                   <option value="totalDefects">Defect ทั้งหมด</option>
                   <option value="defectsOver30Days">ค้าง &gt; 30 วัน</option>
                   <option value="defectsOver45Days">ค้าง &gt; 45 วัน</option>
@@ -165,13 +165,14 @@ export function ProjectOverviewQualityPage() {
             <div className="w-12 flex-shrink-0 text-center">
               <span className="text-xs font-semibold text-amber-600">ค้าง</span>
             </div>
-            <div className="w-32 flex-shrink-0 pl-2">
+            <div className="w-52 flex-shrink-0 pl-2">
               <span className="text-xs font-semibold text-slate-600">SLA งานค้าง (วัน)</span>
-              <div className="grid grid-cols-4 gap-0 mt-0.5">
+              <div className="grid grid-cols-5 gap-1 mt-0.5">
                 <span className="text-[10px] text-blue-500 text-center">&lt;30</span>
                 <span className="text-[10px] text-amber-500 text-center">30-45</span>
                 <span className="text-[10px] text-orange-500 text-center">45-60</span>
-                <span className="text-[10px] text-red-500 text-center">&gt;60</span>
+                <span className="text-[10px] text-red-500 text-center">60-120</span>
+                <span className="text-[10px] text-red-800 text-center">&gt;120</span>
               </div>
             </div>
             <div className="w-48 flex-shrink-0 text-center pl-2">
@@ -195,7 +196,8 @@ export function ProjectOverviewQualityPage() {
                   { label: '<30d', color: '#60a5fa' },
                   { label: '30-45', color: '#f59e0b' },
                   { label: '45-60', color: '#f97316' },
-                  { label: '>60d', color: '#ef4444' },
+                  { label: '60-120', color: '#ef4444' },
+                  { label: '>120d', color: '#991b1b' },
                 ].map((item, i) => (
                   <div key={i} className="flex items-center gap-1">
                     <span className="inline-block w-2 h-2 rounded-sm" style={{ backgroundColor: item.color }} />
@@ -212,7 +214,8 @@ export function ProjectOverviewQualityPage() {
               const under30 = p.openDefects - (p.defectsOver30Days || 0);
               const days30to45 = (p.defectsOver30Days || 0) - (p.defectsOver45Days || 0);
               const days45to60 = (p.defectsOver45Days || 0) - (p.defectsOver60Days || 0);
-              const over60 = p.defectsOver60Days || 0;
+              const days60to120 = (p.defectsOver60Days || 0) - (p.defectsOver120Days || 0);
+              const over120 = p.defectsOver120Days || 0;
 
               const name = p.projectName?.replace(/^เสนา\s*/, '') || p.projectId;
 
@@ -239,13 +242,14 @@ export function ProjectOverviewQualityPage() {
                     <span className={`text-sm font-bold ${p.openDefects > 0 ? 'text-amber-600' : 'text-slate-400'}`}>{p.openDefects.toLocaleString()}</span>
                   </div>
                   {/* SLA aging grid */}
-                  <div className="w-32 flex-shrink-0 pl-2">
-                    <div className="grid grid-cols-4 gap-0">
+                  <div className="w-52 flex-shrink-0 pl-2">
+                    <div className="grid grid-cols-5 gap-1">
                       {[
                         { val: under30, color: 'text-blue-500', bg: under30 > 0 ? 'bg-blue-50' : '' },
                         { val: days30to45, color: 'text-amber-500', bg: days30to45 > 0 ? 'bg-amber-50' : '' },
                         { val: days45to60, color: 'text-orange-500', bg: days45to60 > 0 ? 'bg-orange-50' : '' },
-                        { val: over60, color: 'text-red-600', bg: over60 > 0 ? 'bg-red-50' : '' },
+                        { val: days60to120, color: 'text-red-600', bg: days60to120 > 0 ? 'bg-red-50' : '' },
+                        { val: over120, color: 'text-red-800', bg: over120 > 0 ? 'bg-red-100' : '' },
                       ].map((c, i) => (
                         <div key={i} className={`text-center py-0.5 ${c.bg}`}>
                           <span className={`text-xs font-bold ${c.val > 0 ? c.color : 'text-slate-300'}`}>{c.val.toLocaleString()}</span>
@@ -304,7 +308,8 @@ export function ProjectOverviewQualityPage() {
                         { pct: p.openDefects > 0 ? (under30 / p.openDefects) * 100 : 0, color: '#60a5fa', count: under30, label: '<30 วัน' },
                         { pct: p.openDefects > 0 ? (days30to45 / p.openDefects) * 100 : 0, color: '#f59e0b', count: days30to45, label: '30-45 วัน' },
                         { pct: p.openDefects > 0 ? (days45to60 / p.openDefects) * 100 : 0, color: '#f97316', count: days45to60, label: '45-60 วัน' },
-                        { pct: p.openDefects > 0 ? (over60 / p.openDefects) * 100 : 0, color: '#ef4444', count: over60, label: '>60 วัน' },
+                        { pct: p.openDefects > 0 ? (days60to120 / p.openDefects) * 100 : 0, color: '#ef4444', count: days60to120, label: '60-120 วัน' },
+                        { pct: p.openDefects > 0 ? (over120 / p.openDefects) * 100 : 0, color: '#991b1b', count: over120, label: '>120 วัน' },
                       ];
                       return (
                         <>
@@ -327,7 +332,7 @@ export function ProjectOverviewQualityPage() {
                           </div>
                           <div className="flex justify-between text-[10px] font-mono">
                             <span className="text-slate-400">&lt;30d: {under30.toLocaleString()}</span>
-                            <span className="text-red-500">&gt;60d: {over60.toLocaleString()}</span>
+                            <span className="text-red-500">&gt;120d: {over120.toLocaleString()}</span>
                           </div>
                         </div>
                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/aging:block z-50 pointer-events-none">

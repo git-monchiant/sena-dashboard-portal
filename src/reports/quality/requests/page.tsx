@@ -37,13 +37,14 @@ export function RequestsPage() {
 
   useEffect(() => { fetchProjects().then(setProjects).catch(() => {}); }, []);
 
-  const navState = location.state as { jobFilter?: JobFilter; fromPage?: boolean; backTo?: string; backLabel?: string } | null;
+  const navState = location.state as { jobFilter?: JobFilter; courtesyOnly?: boolean; fromPage?: boolean; backTo?: string; backLabel?: string } | null;
   const fromPage = !!navState?.fromPage;
   const backTo = navState?.backTo || '/quality';
   const backLabel = navState?.backLabel || 'กลับไป Overview';
 
   // Table controls
   const [jobFilter, setJobFilter] = useState<JobFilter>(navState?.jobFilter || 'all');
+  const [courtesyOnly, setCourtesyOnly] = useState(!!navState?.courtesyOnly);
   const [searchQuery, setSearchQuery] = useState('');
   const [bucketFilter, setBucketFilter] = useState<BucketKey | 'all'>('all');
   const [sortBy, setSortBy] = useState<AgingSortField>('openDate');
@@ -78,9 +79,11 @@ export function RequestsPage() {
       projectId: currentFilters.projectId || undefined,
       projectType: currentFilters.projectType || undefined,
       category: currentFilters.category || undefined,
+      workArea: currentFilters.workArea || undefined,
       dateFrom: currentFilters.dateFrom || undefined,
       dateTo: currentFilters.dateTo || undefined,
       jobFilter: jobFilter,
+      courtesyOnly: courtesyOnly || undefined,
       bucket: bucketFilter !== 'all' ? bucketFilter : undefined,
       search: searchQuery || undefined,
       sortBy,
@@ -88,7 +91,7 @@ export function RequestsPage() {
       limit: effectiveLimit,
       offset: effectiveOffset,
     }).then(setTableData);
-  }, [currentFilters, jobFilter, bucketFilter, searchQuery, sortBy, sortOrder, pageSize, currentPage, showAll]);
+  }, [currentFilters, jobFilter, courtesyOnly, bucketFilter, searchQuery, sortBy, sortOrder, pageSize, currentPage, showAll]);
 
   const handleApplyFilters = (filters: QualityFilterState) => {
     loadFilters(filters);
@@ -136,7 +139,7 @@ export function RequestsPage() {
       <div className="p-8 space-y-6">
         {fromPage && (
           <div className="flex items-center gap-3">
-            <button onClick={() => navigate(backTo)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+            <button onClick={() => navigate(backTo)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer">
               <ArrowLeft className="w-5 h-5 text-slate-600" />
             </button>
             <span className="text-sm text-slate-500">{backLabel}</span>
@@ -153,7 +156,7 @@ export function RequestsPage() {
                 <Clock className="w-5 h-5 text-amber-500" />
                 <h3 className="font-semibold text-slate-800">
                   {showAll
-                    ? jobFilter === 'all' ? 'รายการงานทั้งหมด' : jobFilter === 'closed' ? 'รายการงานปิดแล้ว' : 'รายการงานเปิดอยู่ทั้งหมด'
+                    ? jobFilter === 'all' ? 'รายการงานทั้งหมด' : jobFilter === 'closed' ? 'รายการงานปิดแล้ว' : 'รายการกำลังดำเนินการทั้งหมด'
                     : `Top 10 ${jobFilter === 'all' ? 'งานทั้งหมด' : jobFilter === 'closed' ? 'งานปิดแล้ว' : 'งานค้างนาน'} (เรียงตาม${sortLabels[sortBy]})`}
                 </h3>
                 {bucketFilter !== 'all' && (
@@ -174,9 +177,17 @@ export function RequestsPage() {
                 className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
               >
                 <option value="all">ทั้งหมด</option>
-                <option value="open">เปิดอยู่</option>
+                <option value="open">กำลังดำเนินการ</option>
                 <option value="closed">เสร็จแล้ว</option>
                 <option value="cancelled">ยกเลิก</option>
+              </select>
+              <select
+                value={courtesyOnly ? 'courtesy' : 'all'}
+                onChange={(e) => { setCourtesyOnly(e.target.value === 'courtesy'); setCurrentPage(1); }}
+                className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+              >
+                <option value="all">ทุกประเภท</option>
+                <option value="courtesy">ขอความอนุเคราะห์</option>
               </select>
               <select
                 value={sortBy}

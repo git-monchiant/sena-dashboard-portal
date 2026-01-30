@@ -19,6 +19,9 @@ export interface QualityKPIData {
   closedUnits: number;
   cancelledJobs: number;
   cancelledUnits: number;
+  avgReviewScore: number | null;
+  reviewCount: number;
+  courtesyJobs: number;
 }
 
 export interface TrendDataPoint {
@@ -49,6 +52,7 @@ export interface ProjectDefect {
   defectsOver30Days: number;
   defectsOver45Days: number;
   defectsOver60Days: number;
+  defectsOver120Days: number;
   avgResolutionDays: number;
   completionRate: number;
   avgOpenToAssign: number;
@@ -99,6 +103,7 @@ export interface QualityOverviewData {
     totalUnits: number;
   };
   nullDateOpenJobs: number;
+  currentOpenJobs: number;
   slaAging: { bucket: string; label: string; color: string; total: number; openJobs: number; closedJobs: number }[];
   urgentDistribution: { isUrgent: boolean; label: string; total: number; openJobs: number; closedJobs: number; color: string }[];
   monthlySlaBreakdown: { month: string; under30: number; d30to45: number; d45to60: number; over60: number; total: number }[];
@@ -109,6 +114,7 @@ export interface QualityOverviewData {
   workAreaBreakdown: { workArea: string; total: number; openJobs: number; closedJobs: number }[];
   workAreaTrend: { month: string; [key: string]: string | number }[];
   workAreaNullDateOpen: Record<string, number>;
+  reviewTrend: { month: string; closed: number; reviewCount: number; avgScore: number | null }[];
 }
 
 export async function fetchQualityOverview(

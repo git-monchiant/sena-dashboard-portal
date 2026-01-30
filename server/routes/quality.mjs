@@ -274,6 +274,12 @@ router.get('/overview', async (req, res, next) => {
       trendConditions.push(`COALESCE(work_area, 'customer_room') = $${trendParamIdx++}`);
       trendParams.push(work_area);
     }
+    if (category && CATEGORY_GROUP_MAP[category]) {
+      const cats = CATEGORY_GROUP_MAP[category];
+      const placeholders = cats.map(() => `$${trendParamIdx++}`);
+      trendConditions.push(`repair_category IN (${placeholders.join(',')})`);
+      trendParams.push(...cats);
+    }
     const trendWhereClause = trendConditions.length > 0 ? `WHERE ${trendConditions.join(' AND ')}` : '';
 
     // Run all queries in parallel
@@ -299,7 +305,10 @@ router.get('/overview', async (req, res, next) => {
       workAreaClosedResult,
       workAreaNullDateResult,
       workAreaCompletedResult,
+      currentOpenResult,
       cancelledTrendResult,
+      reviewScoreResult,
+      reviewTrendResult,
     ] = await Promise.all([
       // 1. KPIs
       qualityPool.query(`
@@ -312,7 +321,7 @@ router.get('/overview', async (req, res, next) => {
           COUNT(*) FILTER (WHERE job_sub_status NOT IN ('completed', 'cancel') AND open_date < NOW() - INTERVAL '45 days' AND open_date >= NOW() - INTERVAL '60 days') AS aging_45_60,
           COUNT(*) FILTER (WHERE job_sub_status NOT IN ('completed', 'cancel') AND open_date < NOW() - INTERVAL '60 days' AND open_date >= NOW() - INTERVAL '120 days') AS aging_over_60,
           COUNT(*) FILTER (WHERE job_sub_status NOT IN ('completed', 'cancel') AND open_date < NOW() - INTERVAL '120 days') AS aging_over_120,
-          ROUND(AVG(EXTRACT(EPOCH FROM (close_date - open_date)) / 86400) FILTER (WHERE close_date IS NOT NULL)::numeric, 1) AS avg_resolution_days,
+          ROUND(AVG(EXTRACT(EPOCH FROM (close_date - open_date)) / 86400) FILTER (WHERE close_date IS NOT NULL AND job_sub_status = 'completed')::numeric, 1) AS avg_resolution_days,
           ROUND(
             COUNT(*) FILTER (WHERE job_sub_status IN ('completed', 'cancel'))::numeric / NULLIF(COUNT(*), 0) * 100, 1
           ) AS completion_rate,
@@ -321,7 +330,9 @@ router.get('/overview', async (req, res, next) => {
           COUNT(DISTINCT CONCAT(project_id, '|', house_number)) FILTER (WHERE job_sub_status NOT IN ('completed', 'cancel')) AS open_units,
           COUNT(DISTINCT CONCAT(project_id, '|', house_number)) FILTER (WHERE job_sub_status IN ('completed', 'cancel')) AS closed_units,
           COUNT(*) FILTER (WHERE job_sub_status = 'cancel') AS cancelled_jobs,
-          COUNT(DISTINCT CONCAT(project_id, '|', house_number)) FILTER (WHERE job_sub_status = 'cancel') AS cancelled_units
+          COUNT(DISTINCT CONCAT(project_id, '|', house_number)) FILTER (WHERE job_sub_status = 'cancel') AS cancelled_units,
+          COUNT(*) FILTER (WHERE review_score IS NOT NULL AND TRIM(review_score) != '') AS review_count,
+          COUNT(*) FILTER (WHERE warranty_status IS DISTINCT FROM 'inWarranty' AND technician_name LIKE 'ช่าง%' AND job_sub_status != 'cancel') AS courtesy_jobs
         FROM trn_repair
         ${whereClause}
       `, params),
@@ -362,7 +373,8 @@ router.get('/overview', async (req, res, next) => {
           COUNT(*) FILTER (WHERE job_sub_status NOT IN ('completed', 'cancel') AND COALESCE(open_date, assign_date, assessment_date, service_date) < NOW() - INTERVAL '30 days') AS defects_over_30_days,
           COUNT(*) FILTER (WHERE job_sub_status NOT IN ('completed', 'cancel') AND COALESCE(open_date, assign_date, assessment_date, service_date) < NOW() - INTERVAL '45 days') AS defects_over_45_days,
           COUNT(*) FILTER (WHERE job_sub_status NOT IN ('completed', 'cancel') AND COALESCE(open_date, assign_date, assessment_date, service_date) < NOW() - INTERVAL '60 days') AS defects_over_60_days,
-          ROUND(AVG(EXTRACT(EPOCH FROM (close_date - open_date)) / 86400) FILTER (WHERE close_date IS NOT NULL)::numeric, 1) AS avg_resolution_days,
+          COUNT(*) FILTER (WHERE job_sub_status NOT IN ('completed', 'cancel') AND COALESCE(open_date, assign_date, assessment_date, service_date) < NOW() - INTERVAL '120 days') AS defects_over_120_days,
+          ROUND(AVG(EXTRACT(EPOCH FROM (close_date - open_date)) / 86400) FILTER (WHERE close_date IS NOT NULL AND job_sub_status = 'completed')::numeric, 1) AS avg_resolution_days,
           ROUND(
             COUNT(*) FILTER (WHERE job_sub_status IN ('completed', 'cancel'))::numeric / NULLIF(COUNT(*), 0) * 100, 1
           ) AS completion_rate,
@@ -490,15 +502,14 @@ router.get('/overview', async (req, res, next) => {
         GROUP BY 1
       `, params),
 
-      // 11. Closed jobs by close_date month (for cumulative closed line)
-      // Use COALESCE fallback for jobs without close_date
+      // 11. Closed jobs by close_date month (completed only, cancel has its own bar)
       qualityPool.query(`
         SELECT
           TO_CHAR(COALESCE(close_date, service_date, assessment_date, assign_date, open_date), 'YYYY-MM') AS month,
           COUNT(*) AS closed
         FROM trn_repair
         ${trendWhereClause}
-        ${trendWhereClause ? 'AND' : 'WHERE'} job_sub_status IN ('completed', 'cancel')
+        ${trendWhereClause ? 'AND' : 'WHERE'} job_sub_status = 'completed'
           AND COALESCE(close_date, service_date, assessment_date, assign_date, open_date) IS NOT NULL
         GROUP BY TO_CHAR(COALESCE(close_date, service_date, assessment_date, assign_date, open_date), 'YYYY-MM')
         ORDER BY month
@@ -541,14 +552,14 @@ router.get('/overview', async (req, res, next) => {
           )) / 86400)::int AS age_days,
                  COUNT(*) AS cnt
           FROM trn_repair
-          ${whereClause ? whereClause + ' AND job_sub_status IN (\'completed\', \'cancel\')' : 'WHERE job_sub_status IN (\'completed\', \'cancel\')'}
+          ${whereClause ? whereClause + ' AND job_sub_status = \'completed\'' : 'WHERE job_sub_status = \'completed\''}
           GROUP BY 1
         ) sub
         GROUP BY 1
         ORDER BY 1
       `, params),
 
-      // 17. Work area breakdown (total, open, closed)
+      // 17. Work area breakdown
       qualityPool.query(`
         SELECT COALESCE(work_area, 'customer_room') AS work_area,
           COUNT(*) AS total,
@@ -603,6 +614,14 @@ router.get('/overview', async (req, res, next) => {
         GROUP BY 1, 2 ORDER BY 1
       `, trendParams),
 
+      // 19a. Current open jobs count (no date filter, for matching cumBacklog)
+      qualityPool.query(`
+        SELECT COUNT(*) AS current_open_jobs
+        FROM trn_repair
+        ${trendWhereClause}
+        ${trendWhereClause ? 'AND' : 'WHERE'} job_sub_status NOT IN ('completed', 'cancel')
+      `, trendParams),
+
       // 19. Cancelled jobs by close_date month (for cancelled bar in trend chart)
       qualityPool.query(`
         SELECT
@@ -614,6 +633,24 @@ router.get('/overview', async (req, res, next) => {
           AND COALESCE(close_date, service_date, assessment_date, assign_date, open_date) IS NOT NULL
         GROUP BY TO_CHAR(COALESCE(close_date, service_date, assessment_date, assign_date, open_date), 'YYYY-MM')
         ORDER BY month
+      `, trendParams),
+
+      // Average review score
+      qualityPool.query(`
+        SELECT review_score FROM trn_repair
+        ${whereClause ? whereClause + ' AND' : 'WHERE'} review_score IS NOT NULL AND TRIM(review_score) != ''
+      `, params),
+
+      // 20. Review trend: per-row close_date month + review_score for JS aggregation
+      qualityPool.query(`
+        SELECT
+          TO_CHAR(COALESCE(close_date, service_date, assessment_date, assign_date, open_date), 'YYYY-MM') AS month,
+          job_sub_status,
+          review_score
+        FROM trn_repair
+        ${trendWhereClause}
+        ${trendWhereClause ? 'AND' : 'WHERE'} job_sub_status = 'completed'
+          AND COALESCE(close_date, service_date, assessment_date, assign_date, open_date) IS NOT NULL
       `, trendParams),
     ]);
 
@@ -696,6 +733,7 @@ router.get('/overview', async (req, res, next) => {
       defectsOver30Days: parseInt(r.defects_over_30_days),
       defectsOver45Days: parseInt(r.defects_over_45_days),
       defectsOver60Days: parseInt(r.defects_over_60_days),
+      defectsOver120Days: parseInt(r.defects_over_120_days),
       avgResolutionDays: parseFloat(r.avg_resolution_days) || 0,
       completionRate: parseFloat(r.completion_rate) || 0,
       avgOpenToAssign: parseFloat(r.avg_open_to_assign) || 0,
@@ -784,6 +822,7 @@ router.get('/overview', async (req, res, next) => {
     // Sync info
     const sync = syncResult.rows[0];
     const nullDateOpenJobs = parseInt(nullDateResult.rows[0].null_date_open_jobs);
+    const currentOpenJobs = parseInt(currentOpenResult.rows[0].current_open_jobs);
 
     // Process SLA aging distribution
     const bucketOrder = ['under30', '30to45', '45to60', 'over60'];
@@ -832,6 +871,15 @@ router.get('/overview', async (req, res, next) => {
         closedUnits: parseInt(kpi.closed_units) || 0,
         cancelledJobs: parseInt(kpi.cancelled_jobs) || 0,
         cancelledUnits: parseInt(kpi.cancelled_units) || 0,
+        avgReviewScore: (() => {
+          const scores = reviewScoreResult.rows.map(r => {
+            const parts = String(r.review_score).split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+            return parts.length > 0 ? parts.reduce((a, b) => a + b, 0) / parts.length : null;
+          }).filter(v => v !== null);
+          return scores.length > 0 ? parseFloat((scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2)) : null;
+        })(),
+        reviewCount: parseInt(kpi.review_count) || 0,
+        courtesyJobs: parseInt(kpi.courtesy_jobs) || 0,
       },
       trend,
       closedTrend,
@@ -849,6 +897,7 @@ router.get('/overview', async (req, res, next) => {
         totalUnits: parseInt(sync.total_units),
       },
       nullDateOpenJobs,
+      currentOpenJobs,
       slaAging,
       urgentDistribution,
       monthlySlaBreakdown: monthlySlaResult.rows.map(r => ({
@@ -894,6 +943,28 @@ router.get('/overview', async (req, res, next) => {
           result[r.work_area] = parseInt(r.cnt);
         }
         return result;
+      })(),
+      reviewTrend: (() => {
+        // Aggregate per month: closed count, review count, avg score
+        const byMonth = {};
+        for (const r of reviewTrendResult.rows) {
+          const m = thaiMonths[parseInt(r.month.split('-')[1]) - 1] + ' ' + r.month.split('-')[0].slice(2);
+          if (!byMonth[m]) byMonth[m] = { month: m, closed: 0, reviewCount: 0, scores: [] };
+          byMonth[m].closed++;
+          if (r.review_score && String(r.review_score).trim()) {
+            byMonth[m].reviewCount++;
+            const parts = String(r.review_score).split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+            if (parts.length > 0) {
+              byMonth[m].scores.push(parts.reduce((a, b) => a + b, 0) / parts.length);
+            }
+          }
+        }
+        return Object.values(byMonth).map(m => ({
+          month: m.month,
+          closed: m.closed,
+          reviewCount: m.reviewCount,
+          avgScore: m.scores.length > 0 ? parseFloat((m.scores.reduce((a, b) => a + b, 0) / m.scores.length).toFixed(2)) : null,
+        }));
       })(),
     });
   } catch (err) {
@@ -1000,22 +1071,20 @@ router.post('/etl/repair', async (req, res, next) => {
     await client.query(`ALTER TABLE trn_repair_err ADD COLUMN IF NOT EXISTS job_type TEXT`);
     await client.query(`ALTER TABLE trn_repair ADD COLUMN IF NOT EXISTS work_area TEXT`);
     await client.query(`ALTER TABLE trn_repair_err ADD COLUMN IF NOT EXISTS work_area TEXT`);
+    await client.query(`ALTER TABLE trn_repair ADD COLUMN IF NOT EXISTS opm TEXT`);
+    await client.query(`ALTER TABLE trn_repair_err ADD COLUMN IF NOT EXISTS opm TEXT`);
 
     // 1) TRUNCATE both target tables
     await client.query('TRUNCATE TABLE trn_repair');
     await client.query('TRUNCATE TABLE trn_repair_err');
 
-    // 2) Load master_project_id lookup
-    const masterRows = (await client.query('SELECT project_id, project_name_th, project_type FROM master_project_id')).rows;
+    // 2) Load master_project_id lookup (with fuzzy matching)
+    const masterRows = (await client.query('SELECT project_id, project_name_th, project_name_en, project_type, opm FROM master_project_id')).rows;
     const masterByCode = new Map();
-    const masterByName = new Map();
     for (const m of masterRows) {
       masterByCode.set(m.project_id.trim(), m);
-      // Build name lookup (normalize: trim, lowercase)
-      if (m.project_name_th) {
-        masterByName.set(m.project_name_th.trim().toLowerCase(), m);
-      }
     }
+    const findMasterByName = buildProjectMatcher(masterRows);
 
     // 3) Load senprop type lookup (smartify_code → type)
     const senpropRows = (await client.query('SELECT smartify_code, type FROM stg_repair_senprop')).rows;
@@ -1056,54 +1125,54 @@ router.post('/etl/repair', async (req, res, next) => {
       return last;
     }
 
-    // 4) Column mapping: stg (Thai) → trn (English)
+    // 4) Column mapping: stg → trn
     function mapRow(stg) {
       return {
-        original_project_code: stg['รหัสโครงการ'] || '',
-        original_project_name: stg['ชื่อโครงการ'] || '',
-        open_date: parseDateDMY(stg['วันที่เปิดงาน']),
-        close_date: parseDateDMY(stg['วันที่ปิดงาน']),
-        assessment_date: parseDateDMY(stg['วันที่นัดประเมิน']),
-        assign_date: parseDateDMY(stg['วันที่มอบหมายช่าง']),
-        service_date: parseDateDMY(stg['วันที่เข้าบริการ']),
-        sla_date: parseDateDMY(stg['วันที่ตาม SLA']),
-        document_id: stg['ไอดีเอกสาร'] || '',
-        document_number: stg['เลขที่เอกสาร'] || '',
-        job_status: stg['สถานะใบงาน'] || '',
-        job_sub_status: stg['สถานะย่อยใบงาน'] || '',
-        warranty_status: stg['สถานะประกัน'] || '',
-        sla_exceeded: stg['สถานะเกิน SLA'] || '',
-        is_urgent: stg['สถานะด่วน'] || '',
-        house_number: stg['บ้านเลขที่'] || '',
-        address_detail: stg['รายละเอียดที่อยู่'] || '',
-        residence_type: stg['ประเภทที่อยู่'] || '',
-        address_warranty_status: stg['สถานะประกันของที่อยู่'] || '',
-        repair_category: stg['หมวดหมู่ย่อยแจ้งซ่อม'] || '',
-        issue: stg['issue'] || '',
-        symptom: stg['อาการ'] || '',
-        symptom_detail: stg['รายละเอียดอาการ'] || '',
-        customer_name: stg['ชื่อ-สกุลลูกค้า'] || '',
-        customer_phone: stg['เบอร์โทรลูกค้า'] || '',
-        customer_phone_alt: stg['เบอร์โทรสำรองลูกค้า'] || '',
-        reporter_type: stg['ประเภทผู้แจ้งซ่อม'] || '',
-        request_channel: stg['ช่องทางการแจ้งซ่อม'] || '',
-        technician_name: stg['ชื่อช่าง'] || '',
-        technician_email: stg['อีเมลช่าง'] || '',
-        technician_detail: stg['รายละเอียดช่างผู้ให้บ'] || '',
-        technician_note: stg['บันทึกของช่าง'] || '',
-        admin_note: stg['บันทึกของแอดมิน'] || '',
-        job_history: stg['ประวัติการดำเนินการใน'] || '',
-        admin_read_status: stg['สถานะการเปิดอ่านของแอ'] || '',
-        before_image_url: stg['รูปภาพก่อนดำเนินการ'] || '',
-        after_image_url: stg['รูปภาพหลังดำเนินการ'] || '',
-        customer_image_url: stg['รูปภาพที่ลูกค้าแนบมา'] || '',
-        review_date: stg['วันที่รีวิว'] || '',
-        review_id: stg['ไอดีรีวิว'] || '',
-        review_score: stg['คะแนนรีวิว'] || '',
-        review_comment: stg['ความคิดเห็นรีวิว'] || '',
-        review_tracking_failed: stg['ไม่สามารถติดตามรีวิวไ'] || '',
-        assessment_time: stg['เวลาที่นัดประเมิน'] || '',
-        service_time: stg['เวลาที่เข้าบริการ'] || '',
+        original_project_code: stg.projectID || '',
+        original_project_name: stg.locationName || '',
+        open_date: parseDateDMY(stg.createdAt),
+        close_date: parseDateDMY(stg.completeDate),
+        assessment_date: parseDateDMY(stg.assessmentDate),
+        assign_date: parseDateDMY(stg.assignDate),
+        service_date: parseDateDMY(stg.confirmServiceDate),
+        sla_date: parseDateDMY(stg.dateTimeOverSLA),
+        document_id: stg.id != null ? String(stg.id) : '',
+        document_number: stg.serialNumber || '',
+        job_status: stg.status || '',
+        job_sub_status: stg.adminStatus || '',
+        warranty_status: stg.warrantyStatus || '',
+        sla_exceeded: stg.isOverSLA || '',
+        is_urgent: stg.isUrgent || '',
+        house_number: stg.houseNumber || '',
+        address_detail: stg.address || '',
+        residence_type: stg.addressType || '',
+        address_warranty_status: stg.insuranceStatus || '',
+        repair_category: stg.subCategoryName || '',
+        issue: stg.issue || '',
+        symptom: stg.issueName || '',
+        symptom_detail: stg.issueDescription || '',
+        customer_name: stg.customerName || '',
+        customer_phone: stg.customerTel || '',
+        customer_phone_alt: stg.secondaryTel || '',
+        reporter_type: stg.reporterType || '',
+        request_channel: stg.reportFrom || '',
+        technician_name: stg.providerName || '',
+        technician_email: stg.providerEmail || '',
+        technician_detail: stg.provider || '',
+        technician_note: stg.noteProvider || '',
+        admin_note: stg.adminNote || '',
+        job_history: stg.statusLogs || '',
+        admin_read_status: stg.isReaded || '',
+        before_image_url: stg.beforeImg || '',
+        after_image_url: stg.afterImg || '',
+        customer_image_url: stg.issueImage || '',
+        review_date: stg.reviewedAt || '',
+        review_id: stg.reviewId || '',
+        review_score: stg.reviewRating || '',
+        review_comment: stg.reviewComment || '',
+        review_tracking_failed: stg.unableReview || '',
+        assessment_time: stg.assessmentTime || '',
+        service_time: stg.confirmServiceTime || '',
       };
     }
 
@@ -1127,7 +1196,7 @@ router.post('/etl/repair', async (req, res, next) => {
       'before_image_url', 'after_image_url', 'customer_image_url',
       'review_date', 'review_id', 'review_score', 'review_comment', 'review_tracking_failed',
       'assessment_time', 'service_time',
-      'job_type', 'work_area', 'is_special_case',
+      'job_type', 'work_area', 'is_special_case', 'opm',
     ];
     const placeholders = trnCols.map((_, i) => `$${i + 1}`).join(', ');
     const insertSQL = `INSERT INTO trn_repair (${trnCols.join(', ')}) VALUES (${placeholders})`;
@@ -1135,17 +1204,20 @@ router.post('/etl/repair', async (req, res, next) => {
 
     for (const stg of stgRows) {
       const mapped = mapRow(stg);
-      const code = (stg['รหัสโครงการ'] || '').trim();
+      const code = (stg.projectID || '').trim();
 
-      // Lookup master by project code (try padding 0, 00), fallback by project name
-      // Strip parentheses content e.g. "(RAMK) นิช โมโน รามคำแหง" → "นิช โมโน รามคำแหง"
-      const stgName = (stg['ชื่อโครงการ'] || '').replace(/\(.*?\)/g, '').trim().toLowerCase();
-      const master = (code ? (
+      // Lookup master by project code first (try padding 0, 00 AND stripping leading 0s)
+      const codeStripped = code.replace(/^0+/, '');
+      const masterByCodeMatch = code ? (
         masterByCode.get(code)
         || masterByCode.get('0' + code)
         || masterByCode.get('00' + code)
-      ) : null)
-        || (stgName ? masterByName.get(stgName) : null);
+        || (codeStripped !== code ? masterByCode.get(codeStripped) : null)
+      ) : null;
+
+      // Fallback: fuzzy name matching
+      const master = masterByCodeMatch
+        || (stg.locationName ? (findMasterByName(stg.locationName)?.master || null) : null);
 
       // Fill close_date from job_history if null for completed/cancel jobs
       const status = (mapped.job_sub_status || '').toLowerCase();
@@ -1183,16 +1255,12 @@ router.post('/etl/repair', async (req, res, next) => {
           && mapped.technician_name && mapped.technician_name.trim() !== ''
           && !mapped.technician_name.toLowerCase().includes('sen prop')
           && !mapped.technician_name.startsWith('ช่าง')),
+        master ? (master.opm || '') : '',
       ];
 
-      // Filter out excluded request channels → send to error table
-      // const EXCLUDED_CHANNELS = ['webapp', 'walkin', 'android', 'ios'];
-      // const channel = (mapped.request_channel || '').trim().toLowerCase();
-      // const isExcludedChannel = EXCLUDED_CHANNELS.includes(channel);
-
-      // Filter out test records (admin_note contains เทส or test)
-      const adminNote = (mapped.admin_note || '').toLowerCase();
-      const isTestRecord = adminNote.includes('เทส') || adminNote.includes('test');
+      // Filter test/ทดสอบ records to error regardless of code match
+      const adminNote = (mapped.admin_note || '').trim().toLowerCase();
+      const isTestRecord = adminNote.includes('เทส') || adminNote.includes('ทดสอบ') || adminNote.includes('test');
 
       if (master && !isTestRecord) {
         await client.query(insertSQL, values);
@@ -1252,7 +1320,7 @@ router.post('/etl/condo-qr', async (req, res, next) => {
     await client.query('TRUNCATE TABLE trn_condo_qr_err');
 
     // 2) Load master_project_id lookup (with fuzzy matching)
-    const masterRows = (await client.query('SELECT project_id, project_name_th, project_name_en, project_type FROM master_project_id')).rows;
+    const masterRows = (await client.query('SELECT project_id, project_name_th, project_name_en, project_type, opm FROM master_project_id')).rows;
     const findMaster = buildProjectMatcher(masterRows);
 
     // 3) Read all stg_condo_qr
@@ -1279,7 +1347,7 @@ router.post('/etl/condo-qr', async (req, res, next) => {
       'before_image_url', 'after_image_url', 'customer_image_url',
       'review_date', 'review_id', 'review_score', 'review_comment', 'review_tracking_failed',
       'assessment_time', 'service_time',
-      'job_type', 'work_area', 'is_special_case',
+      'job_type', 'work_area', 'is_special_case', 'opm',
     ];
     const placeholders = trnCols.map((_, i) => `$${i + 1}`).join(', ');
     const insertSQL = `INSERT INTO trn_repair (${trnCols.join(', ')}) VALUES (${placeholders})`;
@@ -1321,6 +1389,7 @@ router.post('/etl/condo-qr', async (req, res, next) => {
           '', '', '', '', '',
           '', '',
           jobType, 'common_area', false,
+          master ? (master.opm || '') : '',
         ];
         await client.query(insertSQL, values);
         insertedCount++;
@@ -1608,7 +1677,7 @@ router.get('/job/:id', async (req, res, next) => {
 // GET /api/quality/aging - long pending jobs list with sort/search/pagination/bucket filter
 router.get('/aging', async (req, res, next) => {
   try {
-    const { project_id, project_type, category, date_from, date_to, job_filter, bucket, search, sort_by, sort_order, limit, offset } = req.query;
+    const { project_id, project_type, category, work_area, date_from, date_to, job_filter, courtesy_only, bucket, search, sort_by, sort_order, limit, offset } = req.query;
 
     const conditions = [];
     const params = [];
@@ -1623,6 +1692,12 @@ router.get('/aging', async (req, res, next) => {
       conditions.push("job_sub_status NOT IN ('completed', 'cancel')");
     }
 
+    // Courtesy filter (independent of status)
+    if (courtesy_only === '1') {
+      conditions.push("warranty_status IS DISTINCT FROM 'inWarranty'");
+      conditions.push("technician_name LIKE 'ช่าง%'");
+    }
+
     if (project_id) { conditions.push(`project_id = $${paramIdx++}`); params.push(project_id); }
     if (project_type) { conditions.push(`project_type = $${paramIdx++}`); params.push(project_type); }
     if (category && CATEGORY_GROUP_MAP[category]) {
@@ -1631,6 +1706,7 @@ router.get('/aging', async (req, res, next) => {
       conditions.push(`repair_category IN (${placeholders.join(',')})`);
       params.push(...cats);
     }
+    if (work_area) { conditions.push(`COALESCE(work_area, 'customer_room') = $${paramIdx++}`); params.push(work_area); }
     if (date_from) { conditions.push(`open_date >= $${paramIdx++}`); params.push(date_from.length <= 7 ? `${date_from}-01` : date_from); }
     if (date_to) {
       // Convert YYYY-MM to last day of that month
@@ -1655,7 +1731,7 @@ router.get('/aging', async (req, res, next) => {
 
     const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
     const bucketWhere = bucket && bucketConditions[bucket] ? `WHERE ${bucketConditions[bucket]}` : '';
-    const searchWhere = search ? `${bucketWhere ? ' AND' : 'WHERE'} (document_number ILIKE '%' || $${paramIdx} || '%' OR project_name ILIKE '%' || $${paramIdx} || '%' OR house_number ILIKE '%' || $${paramIdx} || '%' OR customer_name ILIKE '%' || $${paramIdx} || '%' OR technician_name ILIKE '%' || $${paramIdx} || '%')` : '';
+    const searchWhere = search ? `${bucketWhere ? ' AND' : 'WHERE'} (document_number ILIKE '%' || $${paramIdx} || '%' OR project_name ILIKE '%' || $${paramIdx} || '%' OR house_number ILIKE '%' || $${paramIdx} || '%' OR customer_name ILIKE '%' || $${paramIdx} || '%' OR technician_name ILIKE '%' || $${paramIdx} || '%' OR symptom_detail ILIKE '%' || $${paramIdx} || '%' OR repair_category ILIKE '%' || $${paramIdx} || '%')` : '';
     if (search) { params.push(search); paramIdx++; }
 
     const sortMap = {
@@ -1676,7 +1752,8 @@ router.get('/aging', async (req, res, next) => {
     // Count total
     const countResult = await qualityPool.query(`
       SELECT COUNT(*) AS total FROM (
-        SELECT FLOOR(EXTRACT(EPOCH FROM (COALESCE(close_date, NOW()) - open_date)) / 86400)::int AS age_days
+        SELECT document_number, project_name, house_number, customer_name, technician_name, symptom_detail, repair_category,
+          FLOOR(EXTRACT(EPOCH FROM (COALESCE(close_date, NOW()) - open_date)) / 86400)::int AS age_days
         FROM trn_repair
         ${whereClause}
       ) sub ${bucketWhere} ${searchWhere}

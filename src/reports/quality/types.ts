@@ -100,8 +100,8 @@ export const priorityConfig: Record<Priority, { label: string; color: string; ta
 export const subStatusLabels: Record<string, string> = {
   completed: 'เสร็จสิ้น',
   cancel: 'ยกเลิก',
-  serviceInProgress: 'อยู่ระหว่างดำเนินการ',
-  technicianDispatchPending: 'รอส่งช่าง',
+  serviceInProgress: 'กำลังดำเนินการ',
+  technicianDispatchPending: 'กำลังดำเนินการ',
   confirmAppointmentPending: 'รอยืนยันนัดหมาย',
   appointmentPending: 'รอนัดหมาย',
   inspectionPending: 'รอตรวจสอบ',

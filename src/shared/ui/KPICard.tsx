@@ -105,7 +105,7 @@ export function KPICard({
       <p className={`text-xl font-bold text-left ${valueColorClasses[color]}`}>{value}</p>
 
       {/* Row 3: Subtext (unit count) */}
-      {subtext && <p className={`text-xs mb-1 text-left ${color === 'slate' ? 'text-slate-400' : `text-${color}-500`}`}>{subtext}</p>}
+      {subtext && <p className={`text-xs mb-1 text-left whitespace-nowrap ${color === 'slate' ? 'text-slate-400' : `text-${color}-500`}`}>{subtext}</p>}
 
       {/* Row 4: Title */}
       <p className="text-xs text-slate-500 font-medium text-left">{title}</p>

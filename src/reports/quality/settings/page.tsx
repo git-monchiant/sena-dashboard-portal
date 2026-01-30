@@ -203,7 +203,7 @@ export function SettingsPage() {
       <div className="p-8">
         <Link
           to="/maintenance"
-          className="inline-flex items-center gap-2 text-slate-600 hover:text-primary-600 mb-6"
+          className="inline-flex items-center gap-2 text-slate-600 hover:text-primary-600 mb-6 cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
           กลับไปหน้าภาพรวม
