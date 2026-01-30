@@ -96,6 +96,31 @@ export const priorityConfig: Record<Priority, { label: string; color: string; ta
   low: { label: 'ต่ำ', color: 'green', targetDays: 14 },
 };
 
+// Job Sub-Status (from DB job_sub_status field)
+export const subStatusLabels: Record<string, string> = {
+  completed: 'เสร็จสิ้น',
+  cancel: 'ยกเลิก',
+  serviceInProgress: 'อยู่ระหว่างดำเนินการ',
+  technicianDispatchPending: 'รอส่งช่าง',
+  confirmAppointmentPending: 'รอยืนยันนัดหมาย',
+  appointmentPending: 'รอนัดหมาย',
+  inspectionPending: 'รอตรวจสอบ',
+  repairInProgress: 'ซ่อมอยู่',
+  '': 'ไม่ระบุ',
+};
+
+export const subStatusColors: Record<string, string> = {
+  completed: '#10b981',
+  cancel: '#ef4444',
+  serviceInProgress: '#d97706',
+  technicianDispatchPending: '#f59e0b',
+  confirmAppointmentPending: '#8b5cf6',
+  appointmentPending: '#a78bfa',
+  inspectionPending: '#06b6d4',
+  repairInProgress: '#2563eb',
+  '': '#9ca3af',
+};
+
 // Maintenance Request
 export interface MaintenanceRequest {
   id: string;

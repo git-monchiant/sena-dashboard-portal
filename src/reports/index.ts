@@ -9,6 +9,7 @@ export {
 export {
   QualityOverviewPage,
   QualityAgingPage,
+  QualityRequestsPage,
   QualitySettingsPage,
   ProjectOverviewQualityPage,
   CategoryByProjectPage,

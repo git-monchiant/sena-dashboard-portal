@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown, LucideIcon } from 'lucide-react';
+import { TrendingUp, TrendingDown, ArrowRight, LucideIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 type ColorVariant = 'emerald' | 'blue' | 'purple' | 'orange' | 'amber' | 'red' | 'slate';
@@ -84,18 +84,21 @@ export function KPICard({
         <div className={`w-8 h-8 ${colorClasses[color]} rounded-lg flex items-center justify-center`}>
           <Icon className="w-4 h-4" />
         </div>
-        {change && (
-          <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${badgeColorClasses[color]}`}>
-            {showArrow && changeType !== 'neutral' && (
-              isPositive ? (
-                <TrendingUp className="w-3 h-3" />
-              ) : (
-                <TrendingDown className="w-3 h-3" />
-              )
-            )}
-            {change}
-          </span>
-        )}
+        <div className="flex items-center gap-1.5">
+          {change && (
+            <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${badgeColorClasses[color]}`}>
+              {showArrow && changeType !== 'neutral' && (
+                isPositive ? (
+                  <TrendingUp className="w-3 h-3" />
+                ) : (
+                  <TrendingDown className="w-3 h-3" />
+                )
+              )}
+              {change}
+            </span>
+          )}
+          {isClickable && <ArrowRight className={`w-4 h-4 ${valueColorClasses[color]} opacity-40`} />}
+        </div>
       </div>
 
       {/* Row 2: Value */}

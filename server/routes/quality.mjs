@@ -220,7 +220,7 @@ function getCategoryGroup(rawCategory) {
 // GET /api/quality/overview
 router.get('/overview', async (req, res, next) => {
   try {
-    const { project_id, project_type, category, date_from, date_to } = req.query;
+    const { project_id, project_type, category, work_area, date_from, date_to } = req.query;
 
     // Build dynamic WHERE clause
     const conditions = [];
@@ -240,6 +240,10 @@ router.get('/overview', async (req, res, next) => {
       const placeholders = cats.map(() => `$${paramIdx++}`);
       conditions.push(`repair_category IN (${placeholders.join(',')})`);
       params.push(...cats);
+    }
+    if (work_area) {
+      conditions.push(`COALESCE(work_area, 'customer_room') = $${paramIdx++}`);
+      params.push(work_area);
     }
     if (date_from) {
       // date_from is YYYY-MM, use first day of month
@@ -266,6 +270,10 @@ router.get('/overview', async (req, res, next) => {
       trendConditions.push(`project_type = $${trendParamIdx++}`);
       trendParams.push(project_type);
     }
+    if (work_area) {
+      trendConditions.push(`COALESCE(work_area, 'customer_room') = $${trendParamIdx++}`);
+      trendParams.push(work_area);
+    }
     const trendWhereClause = trendConditions.length > 0 ? `WHERE ${trendConditions.join(' AND ')}` : '';
 
     // Run all queries in parallel
@@ -291,6 +299,7 @@ router.get('/overview', async (req, res, next) => {
       workAreaClosedResult,
       workAreaNullDateResult,
       workAreaCompletedResult,
+      cancelledTrendResult,
     ] = await Promise.all([
       // 1. KPIs
       qualityPool.query(`
@@ -310,7 +319,9 @@ router.get('/overview', async (req, res, next) => {
           COUNT(DISTINCT project_id) AS distinct_projects,
           COUNT(DISTINCT CONCAT(project_id, '|', house_number)) AS distinct_units,
           COUNT(DISTINCT CONCAT(project_id, '|', house_number)) FILTER (WHERE job_sub_status NOT IN ('completed', 'cancel')) AS open_units,
-          COUNT(DISTINCT CONCAT(project_id, '|', house_number)) FILTER (WHERE job_sub_status IN ('completed', 'cancel')) AS closed_units
+          COUNT(DISTINCT CONCAT(project_id, '|', house_number)) FILTER (WHERE job_sub_status IN ('completed', 'cancel')) AS closed_units,
+          COUNT(*) FILTER (WHERE job_sub_status = 'cancel') AS cancelled_jobs,
+          COUNT(DISTINCT CONCAT(project_id, '|', house_number)) FILTER (WHERE job_sub_status = 'cancel') AS cancelled_units
         FROM trn_repair
         ${whereClause}
       `, params),
@@ -537,9 +548,12 @@ router.get('/overview', async (req, res, next) => {
         ORDER BY 1
       `, params),
 
-      // 17. Work area breakdown
+      // 17. Work area breakdown (total, open, closed)
       qualityPool.query(`
-        SELECT COALESCE(work_area, 'customer_room') AS work_area, COUNT(*) AS total
+        SELECT COALESCE(work_area, 'customer_room') AS work_area,
+          COUNT(*) AS total,
+          COUNT(*) FILTER (WHERE job_sub_status NOT IN ('completed', 'cancel')) AS open_jobs,
+          COUNT(*) FILTER (WHERE job_sub_status IN ('completed', 'cancel')) AS closed_jobs
         FROM trn_repair
         ${whereClause}
         GROUP BY 1
@@ -588,6 +602,19 @@ router.get('/overview', async (req, res, next) => {
           AND job_sub_status IN ('completed', 'cancel')
         GROUP BY 1, 2 ORDER BY 1
       `, trendParams),
+
+      // 19. Cancelled jobs by close_date month (for cancelled bar in trend chart)
+      qualityPool.query(`
+        SELECT
+          TO_CHAR(COALESCE(close_date, service_date, assessment_date, assign_date, open_date), 'YYYY-MM') AS month,
+          COUNT(*) AS cancelled
+        FROM trn_repair
+        ${trendWhereClause}
+        ${trendWhereClause ? 'AND' : 'WHERE'} job_sub_status = 'cancel'
+          AND COALESCE(close_date, service_date, assessment_date, assign_date, open_date) IS NOT NULL
+        GROUP BY TO_CHAR(COALESCE(close_date, service_date, assessment_date, assign_date, open_date), 'YYYY-MM')
+        ORDER BY month
+      `, trendParams),
     ]);
 
     // Process KPIs
@@ -608,6 +635,12 @@ router.get('/overview', async (req, res, next) => {
     const closedTrend = closedTrendResult.rows.map(r => ({
       month: thaiMonths[parseInt(r.month.split('-')[1]) - 1] + ' ' + r.month.split('-')[0].slice(2),
       closed: parseInt(r.closed),
+    }));
+
+    // Cancelled trend (by close_date)
+    const cancelledTrend = cancelledTrendResult.rows.map(r => ({
+      month: thaiMonths[parseInt(r.month.split('-')[1]) - 1] + ' ' + r.month.split('-')[0].slice(2),
+      cancelled: parseInt(r.cancelled),
     }));
 
     // Group raw categories into mapped groups
@@ -797,9 +830,12 @@ router.get('/overview', async (req, res, next) => {
         distinctUnits: parseInt(kpi.distinct_units) || 0,
         openUnits: parseInt(kpi.open_units) || 0,
         closedUnits: parseInt(kpi.closed_units) || 0,
+        cancelledJobs: parseInt(kpi.cancelled_jobs) || 0,
+        cancelledUnits: parseInt(kpi.cancelled_units) || 0,
       },
       trend,
       closedTrend,
+      cancelledTrend,
       openJobsByCategory,
       projectDefects,
       projectDefectsByCategory,
@@ -830,6 +866,8 @@ router.get('/overview', async (req, res, next) => {
       workAreaBreakdown: workAreaResult.rows.map(r => ({
         workArea: r.work_area,
         total: parseInt(r.total),
+        openJobs: parseInt(r.open_jobs),
+        closedJobs: parseInt(r.closed_jobs),
       })),
       workAreaTrend: (() => {
         const map = {};
@@ -1002,6 +1040,22 @@ router.post('/etl/repair', async (req, res, next) => {
       return new Date(y, m - 1, d);
     }
 
+    // Helper: parse close/cancel date from job_history text
+    function parseCloseDateFromHistory(history, status) {
+      if (!history) return null;
+      const st = (status || '').toLowerCase();
+      const keyword = st === 'cancel' ? 'ยกเลิก' : 'ปิดงาน';
+      const re = new RegExp(`\\[(\\d{2})/(\\d{2})/(\\d{4})\\s+\\d{2}:\\d{2}\\]\\s*.*${keyword}`, 'g');
+      let last = null;
+      let m;
+      while ((m = re.exec(history)) !== null) {
+        let y = parseInt(m[3]);
+        if (y > 2400) y -= 543;
+        last = new Date(y, parseInt(m[2]) - 1, parseInt(m[1]));
+      }
+      return last;
+    }
+
     // 4) Column mapping: stg (Thai) → trn (English)
     function mapRow(stg) {
       return {
@@ -1092,6 +1146,12 @@ router.post('/etl/repair', async (req, res, next) => {
         || masterByCode.get('00' + code)
       ) : null)
         || (stgName ? masterByName.get(stgName) : null);
+
+      // Fill close_date from job_history if null for completed/cancel jobs
+      const status = (mapped.job_sub_status || '').toLowerCase();
+      if (!mapped.close_date && (status === 'completed' || status === 'cancel')) {
+        mapped.close_date = parseCloseDateFromHistory(mapped.job_history, status);
+      }
 
       const values = [
         'smartifyhome',
@@ -1521,9 +1581,23 @@ router.get('/job/:id', async (req, res, next) => {
       warrantyStatus: r.warranty_status || '',
       slaExceeded: r.sla_exceeded === true || r.sla_exceeded === 'True',
       requestChannel: r.request_channel || '',
-      reviewScore: r.review_score ? parseFloat(r.review_score) : null,
+      reviewScore: (() => {
+        if (r.review_score == null || String(r.review_score).trim() === '') return null;
+        const parts = String(r.review_score).split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+        if (parts.length === 0) return null;
+        return Math.round((parts.reduce((a, b) => a + b, 0) / parts.length) * 10) / 10;
+      })(),
       reviewComment: r.review_comment || '',
-      reviewDate: r.review_date,
+      reviewDate: (() => {
+        if (!r.review_date) return null;
+        if (r.review_date instanceof Date) return r.review_date.toISOString();
+        const m = String(r.review_date).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (m) {
+          let y = parseInt(m[3]); if (y > 2400) y -= 543;
+          return `${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}T00:00:00`;
+        }
+        return r.review_date;
+      })(),
       daysOpen: parseInt(r.age_days) || 0,
       jobType: r.job_type || null,
       workArea: r.work_area || null,
@@ -1540,9 +1614,11 @@ router.get('/aging', async (req, res, next) => {
     const params = [];
     let paramIdx = 1;
 
-    // Job filter: open (default), closed, or all
+    // Job filter: open (default), closed, cancelled, or all
     if (job_filter === 'closed') {
-      conditions.push("job_sub_status IN ('completed', 'cancel')");
+      conditions.push("job_sub_status = 'completed'");
+    } else if (job_filter === 'cancelled') {
+      conditions.push("job_sub_status = 'cancel'");
     } else if (job_filter !== 'all') {
       conditions.push("job_sub_status NOT IN ('completed', 'cancel')");
     }
@@ -1600,7 +1676,7 @@ router.get('/aging', async (req, res, next) => {
     // Count total
     const countResult = await qualityPool.query(`
       SELECT COUNT(*) AS total FROM (
-        SELECT FLOOR(EXTRACT(EPOCH FROM (NOW() - open_date)) / 86400)::int AS age_days
+        SELECT FLOOR(EXTRACT(EPOCH FROM (COALESCE(close_date, NOW()) - open_date)) / 86400)::int AS age_days
         FROM trn_repair
         ${whereClause}
       ) sub ${bucketWhere} ${searchWhere}
@@ -1621,10 +1697,15 @@ router.get('/aging', async (req, res, next) => {
           assessment_date,
           assign_date,
           service_date,
+          close_date,
           customer_name,
           job_type,
           work_area,
-          FLOOR(EXTRACT(EPOCH FROM (NOW() - open_date)) / 86400)::int AS age_days
+          job_history,
+          symptom_detail,
+          review_date,
+          review_score,
+          FLOOR(EXTRACT(EPOCH FROM (COALESCE(close_date, NOW()) - open_date)) / 86400)::int AS age_days
         FROM trn_repair
         ${whereClause}
       ) sub ${bucketWhere} ${searchWhere}
@@ -1632,8 +1713,28 @@ router.get('/aging', async (req, res, next) => {
       LIMIT ${effectiveLimit} OFFSET ${effectiveOffset}
     `, params);
 
+    // Helper: parse close/cancel date from job_history when close_date is null
+    const parseCloseDateFromHistory = (history, status) => {
+      if (!history || !['completed', 'cancel'].includes(status)) return null;
+      const pattern = status === 'cancel' ? /\[(\d{2})\/(\d{2})\/(\d{4})\s+\d{2}:\d{2}\]\s*.*ยกเลิก/g : /\[(\d{2})\/(\d{2})\/(\d{4})\s+\d{2}:\d{2}\]\s*ปิดงาน/g;
+      let last = null;
+      let m;
+      while ((m = pattern.exec(history)) !== null) {
+        last = new Date(`${m[3]}-${m[2]}-${m[1]}T00:00:00Z`);
+      }
+      return last;
+    };
+
     const jobs = dataResult.rows.map(r => {
-      const days = parseInt(r.age_days) || 0;
+      let days = parseInt(r.age_days) || 0;
+      // Recalculate for completed/cancel with null close_date
+      if (!r.close_date && ['completed', 'cancel'].includes(r.job_sub_status) && r.open_date) {
+        const histClose = parseCloseDateFromHistory(r.job_history, r.job_sub_status);
+        if (histClose) {
+          days = Math.floor((histClose.getTime() - new Date(r.open_date).getTime()) / 86400000);
+        }
+      }
+      if (days < 1) days = 1;
       const bucket = days <= 30 ? '0-30' : days <= 45 ? '31-45' : days <= 60 ? '46-60' : days <= 120 ? '61-120' : '120+';
       return {
         id: r.document_id,
@@ -1647,11 +1748,30 @@ router.get('/aging', async (req, res, next) => {
         assessmentDate: r.assessment_date,
         assignDate: r.assign_date,
         serviceDate: r.service_date,
+        closeDate: r.close_date,
         customerName: r.customer_name || '-',
         daysOpen: days,
         bucket,
         jobType: r.job_type || null,
         workArea: r.work_area || null,
+        jobHistory: r.job_history || '',
+        symptomDetail: r.symptom_detail || '',
+        reviewDate: (() => {
+          if (!r.review_date) return null;
+          if (r.review_date instanceof Date) return r.review_date.toISOString();
+          const m = String(r.review_date).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+          if (m) {
+            let y = parseInt(m[3]); if (y > 2400) y -= 543;
+            return `${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}T00:00:00`;
+          }
+          return r.review_date;
+        })(),
+        reviewScore: (() => {
+          if (r.review_score == null || String(r.review_score).trim() === '') return null;
+          const parts = String(r.review_score).split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+          if (parts.length === 0) return null;
+          return Math.round((parts.reduce((a, b) => a + b, 0) / parts.length) * 10) / 10;
+        })(),
       };
     });
 

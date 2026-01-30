@@ -15,6 +15,7 @@ export interface QualityFilterState {
   projectId: string;
   projectType: string;
   category: string;
+  workArea: string;
   dateFrom: string;
   dateTo: string;
 }
@@ -177,18 +178,24 @@ const projectTypeOptions: SelectOption[] = [
   { value: 'H', label: 'แนวราบ' },
 ];
 
+const workAreaOptions: SelectOption[] = [
+  { value: 'customer_room', label: 'ห้องลูกค้า' },
+  { value: 'central_area', label: 'ซ่อมส่วนกลาง' },
+  { value: 'sales_office', label: 'สนง.ขาย' },
+];
+
 const STORAGE_KEY = 'quality-overview-filters';
 
-function loadSavedFilters(): { projectId: string; projectType: string; category: string; dateFrom: string; dateTo: string; activePreset: string } {
+function loadSavedFilters(): { projectId: string; projectType: string; category: string; workArea: string; dateFrom: string; dateTo: string; activePreset: string } {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) return { workArea: '', ...JSON.parse(raw) };
   } catch {}
-  return { projectId: '', projectType: '', category: '', dateFrom: '', dateTo: '', activePreset: 'ทั้งหมด' };
+  return { projectId: '', projectType: '', category: '', workArea: '', dateFrom: '', dateTo: '', activePreset: 'ทั้งหมด' };
 }
 
-function saveFilters(projectId: string, projectType: string, category: string, dateFrom: string, dateTo: string, activePreset: string) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ projectId, projectType, category, dateFrom, dateTo, activePreset }));
+function saveFilters(projectId: string, projectType: string, category: string, workArea: string, dateFrom: string, dateTo: string, activePreset: string) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ projectId, projectType, category, workArea, dateFrom, dateTo, activePreset }));
 }
 
 export function QualityFilters({ onApply, projects = [], hideProject = false }: QualityFiltersProps) {
@@ -196,6 +203,7 @@ export function QualityFilters({ onApply, projects = [], hideProject = false }: 
   const [projectId, setProjectId] = useState(saved.projectId);
   const [projectType, setProjectType] = useState(saved.projectType);
   const [category, setCategory] = useState(saved.category || '');
+  const [workArea, setWorkArea] = useState(saved.workArea || '');
   const [dateFrom, setDateFrom] = useState(saved.dateFrom);
   const [dateTo, setDateTo] = useState(saved.dateTo);
   const [activePreset, setActivePreset] = useState(saved.activePreset);
@@ -214,7 +222,7 @@ export function QualityFilters({ onApply, projects = [], hideProject = false }: 
   useEffect(() => {
     if (initialLoadRef.current) {
       initialLoadRef.current = false;
-      onApply({ projectId, projectType, category, dateFrom, dateTo });
+      onApply({ projectId, projectType, category, workArea, dateFrom, dateTo });
     }
   }, []);
 
@@ -223,36 +231,41 @@ export function QualityFilters({ onApply, projects = [], hideProject = false }: 
     label: p.project_name,
   }));
 
-  const emitFilters = (pId: string, pType: string, cat: string, from: string, to: string, preset?: string) => {
-    saveFilters(pId, pType, cat, from, to, preset ?? activePreset);
-    onApply({ projectId: pId, projectType: pType, category: cat, dateFrom: from, dateTo: to });
+  const emitFilters = (pId: string, pType: string, cat: string, wa: string, from: string, to: string, preset?: string) => {
+    saveFilters(pId, pType, cat, wa, from, to, preset ?? activePreset);
+    onApply({ projectId: pId, projectType: pType, category: cat, workArea: wa, dateFrom: from, dateTo: to });
   };
 
   const handleProjectChange = (value: string) => {
     setProjectId(value);
-    emitFilters(value, projectType, category, dateFrom, dateTo);
+    emitFilters(value, projectType, category, workArea, dateFrom, dateTo);
   };
 
   const handleProjectTypeChange = (value: string) => {
     setProjectType(value);
-    emitFilters(projectId, value, category, dateFrom, dateTo);
+    emitFilters(projectId, value, category, workArea, dateFrom, dateTo);
   };
 
   const handleCategoryChange = (value: string) => {
     setCategory(value);
-    emitFilters(projectId, projectType, value, dateFrom, dateTo);
+    emitFilters(projectId, projectType, value, workArea, dateFrom, dateTo);
+  };
+
+  const handleWorkAreaChange = (value: string) => {
+    setWorkArea(value);
+    emitFilters(projectId, projectType, category, value, dateFrom, dateTo);
   };
 
   const handleDateFromChange = (value: string) => {
     setDateFrom(value);
     setActivePreset('');
-    emitFilters(projectId, projectType, category, value, dateTo, '');
+    emitFilters(projectId, projectType, category, workArea, value, dateTo, '');
   };
 
   const handleDateToChange = (value: string) => {
     setDateTo(value);
     setActivePreset('');
-    emitFilters(projectId, projectType, category, dateFrom, value, '');
+    emitFilters(projectId, projectType, category, workArea, dateFrom, value, '');
   };
 
   const handlePreset = (preset: typeof datePresets[number]) => {
@@ -260,7 +273,7 @@ export function QualityFilters({ onApply, projects = [], hideProject = false }: 
     setDateFrom(from);
     setDateTo(to);
     setActivePreset(preset.label);
-    emitFilters(projectId, projectType, category, from, to, preset.label);
+    emitFilters(projectId, projectType, category, workArea, from, to, preset.label);
   };
 
   return (
@@ -286,7 +299,7 @@ export function QualityFilters({ onApply, projects = [], hideProject = false }: 
           ))}
         </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
         <div>
           <label className="block text-sm font-medium text-slate-600 mb-1">ประเภทโครงการ</label>
           <SearchableSelect
@@ -314,6 +327,15 @@ export function QualityFilters({ onApply, projects = [], hideProject = false }: 
             value={category}
             onChange={handleCategoryChange}
             placeholder="ทุกหมวด"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-600 mb-1">ประเภทพื้นที่</label>
+          <SearchableSelect
+            options={workAreaOptions}
+            value={workArea}
+            onChange={handleWorkAreaChange}
+            placeholder="ทั้งหมด"
           />
         </div>
         <div>

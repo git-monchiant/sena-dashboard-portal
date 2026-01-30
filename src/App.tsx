@@ -12,6 +12,7 @@ import {
   ProjectCollectionPage,
   QualityOverviewPage,
   QualityAgingPage,
+  QualityRequestsPage,
   QualitySettingsPage,
   ProjectOverviewQualityPage,
   CategoryByProjectPage,
@@ -64,7 +65,7 @@ function App() {
 
             {/* Quality Report Module */}
             <Route path="quality" element={<QualityOverviewPage />} />
-            <Route path="quality/requests" element={<QualityAgingPage />} />
+            <Route path="quality/requests" element={<QualityRequestsPage />} />
             <Route path="quality/aging" element={<QualityAgingPage />} />
             <Route path="quality/settings" element={<QualitySettingsPage />} />
             <Route path="quality/project-overview" element={<ProjectOverviewQualityPage />} />

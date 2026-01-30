@@ -17,6 +17,7 @@ import {
   ArrowRight,
   ArrowLeft,
   CheckCircle,
+  XCircle,
   FileText,
   Users,
   Building2,
@@ -176,18 +177,7 @@ const subStatusLabels: Record<string, string> = {
 export function QualityOverviewPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const fromProject = !!(location.state as any)?.fromProject;
   const fromPage = !!(location.state as any)?.fromPage;
-
-  // If not coming from project-overview, clear projectId from saved filters
-  if (!fromProject) {
-    try {
-      const saved = JSON.parse(localStorage.getItem('quality-overview-filters') || '{}');
-      if (saved.projectId) {
-        localStorage.setItem('quality-overview-filters', JSON.stringify({ ...saved, projectId: '' }));
-      }
-    } catch {}
-  }
 
   const [data, setData] = useState<QualityOverviewData | null>(null);
   const [projects, setProjects] = useState<ProjectOption[]>([]);
@@ -255,7 +245,7 @@ export function QualityOverviewPage() {
           subtitle="ระบบบริหารจัดการงานซ่อมและข้อร้องเรียนพื้นที่ส่วนกลาง"
         />
         <div className="p-8">
-          <QualityFilters onApply={handleApplyFilters} projects={projects} hideProject={!currentFilters.projectId} />
+          <QualityFilters onApply={handleApplyFilters} projects={projects} />
           <div className="animate-pulse space-y-6">
             <div className="grid grid-cols-5 gap-6">
               {[1, 2, 3, 4, 5].map((i) => (
@@ -294,13 +284,6 @@ export function QualityOverviewPage() {
 
 
 
-  const selectedProjectName = currentFilters.projectId ? projects.find(p => p.project_id === currentFilters.projectId)?.project_name : '';
-  const clearProject = () => {
-    const saved = JSON.parse(localStorage.getItem('quality-overview-filters') || '{}');
-    localStorage.setItem('quality-overview-filters', JSON.stringify({ ...saved, projectId: '' }));
-    setCurrentFilters({ ...currentFilters, projectId: '' });
-  };
-
   return (
     <div className="min-h-screen">
       <PageHeader
@@ -309,20 +292,11 @@ export function QualityOverviewPage() {
       />
 
       <div className="p-8">
-        {currentFilters.projectId && (
-          <div className="flex items-center gap-3 mb-4">
-            <button onClick={() => { clearProject(); navigate('/quality/project-overview'); }} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-              <ArrowLeft className="w-5 h-5 text-slate-600" />
-            </button>
-            <span className="text-sm text-slate-500">กลับไป Project Overview</span>
-            {selectedProjectName && <span className="text-sm font-semibold text-primary-700">· {selectedProjectName}</span>}
-          </div>
-        )}
         {/* Filters */}
-        <QualityFilters onApply={handleApplyFilters} projects={projects} hideProject={!currentFilters.projectId} />
+        <QualityFilters onApply={handleApplyFilters} projects={projects} />
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
           <div
             className="card text-left cursor-pointer hover:shadow-md hover:border-primary-200 transition-all"
             onClick={() => navigate('/quality/requests', { state: { jobFilter: 'all', fromPage: true } })}
@@ -346,14 +320,24 @@ export function QualityOverviewPage() {
             })}
           </div>
           <KPICard
-            title="งานปิดแล้ว"
-            value={(data.kpis.totalJobs - data.kpis.openJobs).toLocaleString()}
-            change={`${(data.kpis.totalJobs > 0 ? (((data.kpis.totalJobs - data.kpis.openJobs) / data.kpis.totalJobs) * 100).toFixed(1) : 0)}%`}
+            title="เสร็จสิ้น"
+            value={(data.kpis.totalJobs - data.kpis.openJobs - (data.kpis.cancelledJobs || 0)).toLocaleString()}
+            change={`${(data.kpis.totalJobs > 0 ? (((data.kpis.totalJobs - data.kpis.openJobs - (data.kpis.cancelledJobs || 0)) / data.kpis.totalJobs) * 100).toFixed(1) : 0)}%`}
             showArrow={false}
             subtext={`${data.kpis.closedUnits?.toLocaleString() ?? 0} ยูนิต`}
             icon={CheckCircle}
             color="emerald"
             onClick={() => navigate('/quality/requests', { state: { jobFilter: 'closed', fromPage: true } })}
+          />
+          <KPICard
+            title="ยกเลิก"
+            value={(data.kpis.cancelledJobs || 0).toLocaleString()}
+            change={`${(data.kpis.totalJobs > 0 ? (((data.kpis.cancelledJobs || 0) / data.kpis.totalJobs) * 100).toFixed(1) : 0)}%`}
+            showArrow={false}
+            subtext={`${(data.kpis.cancelledUnits || 0).toLocaleString()} ยูนิต`}
+            icon={XCircle}
+            color="red"
+            onClick={() => navigate('/quality/requests', { state: { jobFilter: 'cancelled', fromPage: true } })}
           />
           <KPICard
             title="งานเปิดอยู่"
@@ -363,7 +347,7 @@ export function QualityOverviewPage() {
             subtext={`${data.kpis.openUnits?.toLocaleString() ?? 0} ยูนิต`}
             icon={Clock}
             color="amber"
-            onClick={() => navigate('/quality/aging', { state: { jobFilter: 'open', fromPage: true } })}
+            onClick={() => navigate('/quality/requests', { state: { jobFilter: 'open', fromPage: true } })}
           />
           <KPICard
             title="เวลาเฉลี่ยปิดงาน"

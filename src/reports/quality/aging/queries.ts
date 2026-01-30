@@ -10,9 +10,16 @@ export interface AgingJob {
   assessmentDate: string | null;
   assignDate: string | null;
   serviceDate: string | null;
+  closeDate: string | null;
   customerName: string;
   daysOpen: number;
   bucket: '0-30' | '31-45' | '46-60' | '61-120' | '120+';
+  jobType: string | null;
+  workArea: string | null;
+  jobHistory: string;
+  symptomDetail: string;
+  reviewDate: string | null;
+  reviewScore: number | null;
 }
 
 export interface AgingPagination {
@@ -29,7 +36,7 @@ export interface AgingData {
 export type AgingSortField = 'daysOpen' | 'requestNumber' | 'projectName' | 'unitNumber' | 'category' | 'assignee' | 'status' | 'openDate';
 export type SortOrder = 'asc' | 'desc';
 
-export type JobFilter = 'open' | 'closed' | 'all';
+export type JobFilter = 'open' | 'closed' | 'cancelled' | 'all';
 
 export interface AgingFilters {
   projectId?: string;
