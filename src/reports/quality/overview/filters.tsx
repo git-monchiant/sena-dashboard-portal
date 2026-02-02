@@ -29,6 +29,7 @@ interface QualityFiltersProps {
   onApply: (filters: QualityFilterState) => void;
   projects?: ProjectOption[];
   hideProject?: boolean;
+  hideFields?: ('category' | 'workArea' | 'date')[];
 }
 
 // ===== Searchable Select (same pattern as Common Fee) =====
@@ -198,7 +199,7 @@ function saveFilters(projectId: string, projectType: string, category: string, w
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ projectId, projectType, category, workArea, dateFrom, dateTo, activePreset }));
 }
 
-export function QualityFilters({ onApply, projects = [], hideProject = false }: QualityFiltersProps) {
+export function QualityFilters({ onApply, projects = [], hideProject = false, hideFields = [] }: QualityFiltersProps) {
   const saved = loadSavedFilters();
   const [projectId, setProjectId] = useState(saved.projectId);
   const [projectType, setProjectType] = useState(saved.projectType);
@@ -284,7 +285,7 @@ export function QualityFilters({ onApply, projects = [], hideProject = false }: 
           <h3 className="font-medium text-slate-700">ตัวกรอง</h3>
         </div>
         <div className="flex items-center gap-1">
-          {datePresets.map((preset) => (
+          {!hideFields.includes('date') && datePresets.map((preset) => (
             <button
               key={preset.label}
               onClick={() => handlePreset(preset)}
@@ -320,6 +321,7 @@ export function QualityFilters({ onApply, projects = [], hideProject = false }: 
           />
         </div>
         )}
+        {!hideFields.includes('category') && (
         <div>
           <label className="block text-sm font-medium text-slate-600 mb-1">หมวดงาน</label>
           <SearchableSelect
@@ -329,6 +331,8 @@ export function QualityFilters({ onApply, projects = [], hideProject = false }: 
             placeholder="ทุกหมวด"
           />
         </div>
+        )}
+        {!hideFields.includes('workArea') && (
         <div>
           <label className="block text-sm font-medium text-slate-600 mb-1">ประเภทพื้นที่</label>
           <SearchableSelect
@@ -338,6 +342,8 @@ export function QualityFilters({ onApply, projects = [], hideProject = false }: 
             placeholder="ทั้งหมด"
           />
         </div>
+        )}
+        {!hideFields.includes('date') && (
         <div>
           <label className="block text-sm font-medium text-slate-600 mb-1">ตั้งแต่เดือน</label>
           <div className="relative">
@@ -350,6 +356,8 @@ export function QualityFilters({ onApply, projects = [], hideProject = false }: 
             />
           </div>
         </div>
+        )}
+        {!hideFields.includes('date') && (
         <div>
           <label className="block text-sm font-medium text-slate-600 mb-1">ถึงเดือน</label>
           <div className="relative">
@@ -362,6 +370,7 @@ export function QualityFilters({ onApply, projects = [], hideProject = false }: 
             />
           </div>
         </div>
+        )}
       </div>
     </div>
   );

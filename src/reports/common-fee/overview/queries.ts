@@ -140,6 +140,9 @@ export async function fetchCommonFeeOverview(
   if (filters.payGroup) {
     params.set('pay_group', filters.payGroup);
   }
+  if (filters.expenseType) {
+    params.set('expense_type', filters.expenseType);
+  }
   if (filters.projectType) {
     params.set('project_type', filters.projectType);
   }
@@ -158,6 +161,9 @@ export async function fetchCommonFeeOverview(
   }
   if (filters.payGroup) {
     collectionParams.set('pay_group', filters.payGroup);
+  }
+  if (filters.expenseType) {
+    collectionParams.set('expense_type', filters.expenseType);
   }
   if (filters.projectType) {
     collectionParams.set('project_type', filters.projectType);
@@ -276,6 +282,9 @@ export async function fetchInvoiceSummary(
   if (filters.payGroup) {
     params.set('pay_group', filters.payGroup);
   }
+  if (filters.expenseType) {
+    params.set('expense_type', filters.expenseType);
+  }
   if (filters.projectType) {
     params.set('project_type', filters.projectType);
   }
@@ -324,11 +333,17 @@ export async function fetchCollectionByProject(
   filters: SiteFilterValues
 ): Promise<CollectionByProjectData> {
   const params = new URLSearchParams();
+  if (filters.siteId) {
+    params.set('site_id', filters.siteId);
+  }
   if (filters.year) {
     params.set('year', filters.year);
   }
   if (filters.payGroup) {
     params.set('pay_group', filters.payGroup);
+  }
+  if (filters.expenseType) {
+    params.set('expense_type', filters.expenseType);
   }
   if (filters.projectType) {
     params.set('project_type', filters.projectType);

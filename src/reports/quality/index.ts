@@ -8,4 +8,5 @@ export { SettingsPage as QualitySettingsPage } from './settings';
 export { DataQualityPage } from './data-quality';
 export { ProjectOverviewQualityPage } from './project-overview';
 export { CategoryByProjectPage } from './category-by-project';
+export { ComplainPage as QualityComplainPage } from './complain';
 export * from './types';

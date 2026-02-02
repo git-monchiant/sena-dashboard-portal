@@ -101,6 +101,7 @@ const reportModules: ReportModule[] = [
       { name: 'Category by Project', href: '/quality/category-by-project' },
       { name: 'Aging Report', href: '/quality/aging' },
       { name: 'All Requests', href: '/quality/requests' },
+      { name: 'Complaints', href: '/quality/complain' },
       { name: 'Settings', href: '/quality/settings' },
     ],
   },
@@ -119,7 +120,7 @@ function Sidebar() {
   const location = useLocation();
   const { user } = useAuth();
   const [expandedModules, setExpandedModules] = useState<string[]>([
-    'Quality Reports',
+    'Common Fee Reports',
   ]);
   const [menuVisibility, setMenuVisibility] = useState<MenuVisibility>({
     hiddenCategories: [],

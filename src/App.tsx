@@ -16,6 +16,7 @@ import {
   QualitySettingsPage,
   ProjectOverviewQualityPage,
   CategoryByProjectPage,
+  QualityComplainPage,
   SalesPerformance2025Page,
   ProjectDetailPage,
   EmployeeListPage,
@@ -70,6 +71,7 @@ function App() {
             <Route path="quality/settings" element={<QualitySettingsPage />} />
             <Route path="quality/project-overview" element={<ProjectOverviewQualityPage />} />
             <Route path="quality/category-by-project" element={<CategoryByProjectPage />} />
+            <Route path="quality/complain" element={<QualityComplainPage />} />
 
             {/* Data Tools Module */}
             <Route path="data-tools/excel-import" element={<ExcelImportPage />} />

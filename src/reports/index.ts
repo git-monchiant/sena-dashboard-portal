@@ -13,6 +13,7 @@ export {
   QualitySettingsPage,
   ProjectOverviewQualityPage,
   CategoryByProjectPage,
+  QualityComplainPage,
 } from './quality';
 export {
   SalesPerformance2025Page,

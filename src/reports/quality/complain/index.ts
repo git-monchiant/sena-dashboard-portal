@@ -1,0 +1,1 @@
+export { ComplainPage } from './page';

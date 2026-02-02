@@ -132,7 +132,7 @@ export function ProjectCollectionPage() {
       const cumOverdue = cum.overdueAmount;
       const cumRateRaw = cumTotal > 0 ? (cumPaid / cumTotal) * 100 : 0;
       const cumRate = Math.round(cumRateRaw * 100) / 100; // 2 decimal places
-      const outstanding = cumTotal - cumPaid; // ค้าง = ทั้งหมด - เก็บได้
+      const outstanding = cumOverdue; // ค้าง = overdue amount (ตรงกับ KPI ค้างสะสม)
       const outstandingPct = cumTotal > 0 ? Math.round((100 - cumRate) * 100) / 100 : 0; // 2 decimal places
       // Format amount for label
       const amountLabel = p.paidAmount >= 1000000
@@ -176,10 +176,10 @@ export function ProjectCollectionPage() {
         {/* Filters - hide project dropdown since this is project list page */}
         <SiteFilters
           onApply={handleApplyFilters}
-          storageKey="common-fee-projects-filters"
+          storageKey="common-fee-filters"
           showYear={true}
           showStatus={false}
-          showSite={false}
+          showSite={true}
         />
 
         {/* Summary Cards */}
@@ -382,7 +382,7 @@ export function ProjectCollectionPage() {
                 ))}
                 <div className="w-64 flex-shrink-0 border-l border-slate-200 pl-2 text-center">
                   <span className="text-xs font-bold text-slate-700">เก็บสะสม</span>
-                  <div className="text-[10px] text-slate-500">ทุกปี</div>
+                  <div className="text-[10px] text-slate-500">ถึง {invoiceSummary?.selectedYear || ''}</div>
                 </div>
               </div>
             </div>

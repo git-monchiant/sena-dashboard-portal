@@ -84,6 +84,9 @@ export async function fetchAgingData(filters: AgingFilters): Promise<AgingData> 
   if (filters.payGroup) {
     params.set('pay_group', filters.payGroup);
   }
+  if (filters.expenseType) {
+    params.set('expense_type', filters.expenseType);
+  }
   if (filters.projectType) {
     params.set('project_type', filters.projectType);
   }

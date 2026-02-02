@@ -13,8 +13,8 @@ const baseConfig = {
   port: parseInt(process.env.DB_PORT || '5432'),
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || 'Sen@1775',
-  max: parseInt(process.env.DB_POOL_SIZE || '10'),
-  connectionTimeoutMillis: 10000,
+  max: parseInt(process.env.DB_POOL_SIZE || '30'),
+  connectionTimeoutMillis: 30000,
 };
 
 // Database pools registry

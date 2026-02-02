@@ -138,6 +138,7 @@ export interface SiteFilterValues {
   status: string;
   year: string;
   payGroup: string;
+  expenseType: string;
   projectType: string; // 'condo' | 'lowrise' | ''
   startMonth: string; // YYYY-MM format
   endMonth: string;   // YYYY-MM format
@@ -150,6 +151,7 @@ interface SiteFiltersProps {
   showStatus?: boolean;
   showYear?: boolean;
   showPayGroup?: boolean;
+  showExpenseType?: boolean;
   showProjectType?: boolean;
   showSite?: boolean;
 }
@@ -165,11 +167,18 @@ const statusLabels: Record<string, string> = {
   waiting_fix: 'รอแก้ไข',
 };
 
-const payGroupOptions: SelectOption[] = [
-  { value: 'owner', label: 'เจ้าของห้อง' },
-  { value: 'developer', label: 'ผู้พัฒนา' },
-  { value: 'rent', label: 'ผู้เช่า' },
-  { value: 'agent', label: 'ตัวแทน' },
+const expenseTypeOptions: SelectOption[] = [
+  { value: 'common_fee', label: 'ค่าส่วนกลาง' },
+  { value: 'water', label: 'ค่าน้ำประปา' },
+  { value: 'water_meter', label: 'ค่ามิเตอร์น้ำ' },
+  { value: 'insurance', label: 'ค่าเบี้ยประกัน' },
+  { value: 'parking', label: 'ค่าจอดรถ' },
+  { value: 'surcharge', label: 'เงินเพิ่ม' },
+  { value: 'interest', label: 'ค่าดอกเบี้ย' },
+  { value: 'fine', label: 'ค่าปรับ/เบี้ยปรับ' },
+  { value: 'fund', label: 'เงินกองทุน' },
+  { value: 'electricity', label: 'ค่าไฟฟ้า' },
+  { value: 'other', label: 'อื่นๆ' },
 ];
 
 const projectTypeOptions: SelectOption[] = [
@@ -228,7 +237,8 @@ export function SiteFilters({
   storageKey = 'common-fee-site-filters',
   showStatus = true,
   showYear = true,
-  showPayGroup = true,
+  showPayGroup = false,
+  showExpenseType = true,
   showProjectType = true,
   showSite = true,
 }: SiteFiltersProps) {
@@ -251,6 +261,7 @@ export function SiteFilters({
     const baseFilters: SiteFilterValues = saved ? {
       ...saved,
       payGroup: saved.payGroup === 'all' ? '' : (saved.payGroup || ''),
+      expenseType: saved.expenseType || '',
       year: saved.year || new Date().getFullYear().toString(),
       projectType: saved.projectType || '',
     } : {
@@ -258,6 +269,7 @@ export function SiteFilters({
       status: initialValues?.status || 'all',
       year: initialValues?.year || new Date().getFullYear().toString(),
       payGroup: initialValues?.payGroup || '',
+      expenseType: initialValues?.expenseType || '',
       projectType: initialValues?.projectType || '',
       startMonth: '',
       endMonth: '',
@@ -330,6 +342,7 @@ export function SiteFilters({
       status: 'all',
       year: new Date().getFullYear().toString(),
       payGroup: '',
+      expenseType: '',
       projectType: '',
       startMonth: '',
       endMonth: '',
@@ -382,7 +395,7 @@ export function SiteFilters({
     }) || [];
 
   // Calculate grid columns based on what's shown
-  const gridCols = (showYear ? 1 : 0) + (showSite ? 1 : 0) + (showProjectType ? 1 : 0) + (showStatus ? 1 : 0) + (showPayGroup ? 1 : 0) + 1;
+  const gridCols = (showYear ? 1 : 0) + (showSite ? 1 : 0) + (showProjectType ? 1 : 0) + (showStatus ? 1 : 0) + (showPayGroup ? 1 : 0) + (showExpenseType ? 1 : 0) + 1;
 
   return (
     <div className="card mb-6">
@@ -444,14 +457,32 @@ export function SiteFilters({
           </div>
         )}
 
-        {/* Pay Group Filter */}
-        {showPayGroup && (
+        {/* Expense Type Filter */}
+        {showExpenseType && (
           <div>
             <label className="block text-sm font-medium text-slate-600 mb-1">ประเภทค่าใช้จ่าย</label>
             <SearchableSelect
+              value={filters.expenseType}
+              onChange={(val) => handleChange('expenseType', val)}
+              options={expenseTypeOptions}
+              placeholder="ทั้งหมด"
+            />
+          </div>
+        )}
+
+        {/* Pay Group Filter */}
+        {showPayGroup && (
+          <div>
+            <label className="block text-sm font-medium text-slate-600 mb-1">กลุ่มผู้ชำระ</label>
+            <SearchableSelect
               value={filters.payGroup}
               onChange={(val) => handleChange('payGroup', val)}
-              options={payGroupOptions}
+              options={[
+                { value: 'owner', label: 'เจ้าของห้อง' },
+                { value: 'developer', label: 'ผู้พัฒนา' },
+                { value: 'rent', label: 'ผู้เช่า' },
+                { value: 'agent', label: 'ตัวแทน' },
+              ]}
               placeholder="ทั้งหมด"
             />
           </div>

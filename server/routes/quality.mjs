@@ -71,6 +71,7 @@ function normalizeProjectName(name) {
     .replace(/เดอะ/g, '')                   // remove เดอะ
     .replace(/\b(station|interchange|condo)\b/gi, '') // remove common English suffixes
     .replace(/สเตชั่น/g, '')               // remove สเตชั่น
+    .replace(/วิลเลท/g, 'วิลเลจ')            // normalize วิลเลท → วิลเลจ (common typo)
     .replace(/รามคำแหง/g, 'ราม')            // normalize รามคำแหง → ราม
     .replace(/ramkhamhaeng/gi, 'ram')       // normalize Ramkhamhaeng → ram
     .replace(/[-–]/g, ' ')                  // normalize dashes to spaces
@@ -80,12 +81,26 @@ function normalizeProjectName(name) {
 }
 
 // Multi-strategy project name matching
-function buildProjectMatcher(masterRows) {
+function buildProjectMatcher(masterRows, aliasRows = []) {
   const exactMap = new Map();
   const normalizedMap = new Map();
   const englishMap = new Map();
   const containsIndex = [];
   const engNormIndex = []; // normalized English names for spaceless matching
+
+  // Build a project_id -> master row lookup for alias resolution
+  const idMap = new Map();
+  for (const m of masterRows) idMap.set(m.project_id, m);
+
+  // Load aliases into exactMap (highest priority)
+  for (const a of aliasRows) {
+    const m = idMap.get(a.project_id);
+    if (m) {
+      const aliasNorm = a.alias_name.trim().toLowerCase();
+      exactMap.set(aliasNorm, m);
+      normalizedMap.set(normalizeProjectName(a.alias_name), m);
+    }
+  }
 
   for (const m of masterRows) {
     if (m.project_name_th) {
@@ -1084,7 +1099,8 @@ router.post('/etl/repair', async (req, res, next) => {
     for (const m of masterRows) {
       masterByCode.set(m.project_id.trim(), m);
     }
-    const findMasterByName = buildProjectMatcher(masterRows);
+    const aliasRows = (await client.query('SELECT project_id, alias_name FROM master_project_alias')).rows;
+    const findMasterByName = buildProjectMatcher(masterRows, aliasRows);
 
     // 3) Load senprop type lookup (smartify_code → type)
     const senpropRows = (await client.query('SELECT smartify_code, type FROM stg_repair_senprop')).rows;
@@ -1286,118 +1302,104 @@ router.post('/etl/repair', async (req, res, next) => {
   }
 });
 
-// ==================== ETL: stg_condo_qr → trn_repair ====================
+// ==================== ETL: stg_condo_qr + stg_house_qr → trn_complain (Complain only) ====================
 router.post('/etl/condo-qr', async (req, res, next) => {
   const client = await qualityPool.connect();
   try {
     await client.query('BEGIN');
 
-    // 0) Ensure target tables & columns exist
-    await client.query(`ALTER TABLE trn_repair ADD COLUMN IF NOT EXISTS job_type TEXT`);
-    await client.query(`ALTER TABLE trn_repair ADD COLUMN IF NOT EXISTS work_area TEXT`);
-
-    // Create error table if not exists (same structure as trn_repair + error_reason)
+    // 0) Create trn_complain table if not exists
     await client.query(`
-      CREATE TABLE IF NOT EXISTS trn_condo_qr_err (
+      CREATE TABLE IF NOT EXISTS trn_complain (
+        id SERIAL PRIMARY KEY,
+        datasource TEXT DEFAULT 'condo_qr',
+        project_id TEXT,
+        project_name TEXT,
+        project_type TEXT,
+        original_project_name TEXT,
+        opm TEXT,
+        category TEXT,
+        complaint_topic TEXT,
+        topic_summary TEXT,
+        original_detail TEXT,
+        extracted_detail TEXT,
+        house_no TEXT,
+        row_number INTEGER,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await client.query(`ALTER TABLE trn_complain ADD COLUMN IF NOT EXISTS house_no TEXT`);
+
+    // Create error table if not exists
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS trn_complain_err (
         id SERIAL PRIMARY KEY,
         datasource TEXT,
         original_project_name TEXT,
+        category TEXT,
         complaint_topic TEXT,
-        complaint_detail TEXT,
-        room_no TEXT,
-        status TEXT,
-        consent TEXT,
-        open_date TIMESTAMP,
-        job_type TEXT,
-        work_area TEXT,
+        original_detail TEXT,
+        house_no TEXT,
+        row_number INTEGER,
         error_reason TEXT,
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
+    await client.query(`ALTER TABLE trn_complain_err ADD COLUMN IF NOT EXISTS house_no TEXT`);
 
-    // 1) Delete previous condo_qr data (idempotent reload)
-    await client.query("DELETE FROM trn_repair WHERE datasource = 'condo_qr'");
-    await client.query('TRUNCATE TABLE trn_condo_qr_err');
+    // 1) Idempotent reload
+    await client.query('TRUNCATE TABLE trn_complain');
+    await client.query('TRUNCATE TABLE trn_complain_err');
 
     // 2) Load master_project_id lookup (with fuzzy matching)
     const masterRows = (await client.query('SELECT project_id, project_name_th, project_name_en, project_type, opm FROM master_project_id')).rows;
-    const findMaster = buildProjectMatcher(masterRows);
+    const aliasRows = (await client.query('SELECT project_id, alias_name FROM master_project_alias')).rows;
+    const findMaster = buildProjectMatcher(masterRows, aliasRows);
 
-    // 3) Read all stg_condo_qr
-    const stgRows = (await client.query('SELECT * FROM stg_condo_qr')).rows;
+    // 3) Read Complain rows from both sources
+    const condoRows = (await client.query("SELECT *, '' AS house_no, 'condo_qr' AS src FROM stg_condo_qr WHERE type = 'Complain'")).rows;
+    const houseRows = (await client.query("SELECT *, 'house_qr' AS src FROM stg_house_qr WHERE type = 'Complain'")).rows;
+    const allRows = [...condoRows, ...houseRows];
 
     // 4) Process each row
     let insertedCount = 0;
     let errorCount = 0;
     const matchMethods = {};
+    const sourceCount = { condo_qr: 0, house_qr: 0 };
 
-    const trnCols = [
-      'datasource',
-      'project_id', 'project_name', 'project_type',
-      'original_project_code', 'original_project_name',
-      'open_date', 'close_date', 'assessment_date', 'assign_date', 'service_date', 'sla_date',
-      'document_id', 'document_number', 'job_status', 'job_sub_status',
-      'warranty_status', 'sla_exceeded', 'is_urgent',
-      'house_number', 'address_detail', 'residence_type', 'address_warranty_status',
-      'repair_category', 'issue', 'symptom', 'symptom_detail',
-      'customer_name', 'customer_phone', 'customer_phone_alt',
-      'reporter_type', 'request_channel',
-      'technician_name', 'technician_email', 'technician_detail', 'technician_note',
-      'admin_note', 'job_history', 'admin_read_status',
-      'before_image_url', 'after_image_url', 'customer_image_url',
-      'review_date', 'review_id', 'review_score', 'review_comment', 'review_tracking_failed',
-      'assessment_time', 'service_time',
-      'job_type', 'work_area', 'is_special_case', 'opm',
-    ];
-    const placeholders = trnCols.map((_, i) => `$${i + 1}`).join(', ');
-    const insertSQL = `INSERT INTO trn_repair (${trnCols.join(', ')}) VALUES (${placeholders})`;
+    const insertSQL = `INSERT INTO trn_complain
+      (datasource, project_id, project_name, project_type, original_project_name, opm,
+       category, complaint_topic, topic_summary, original_detail, extracted_detail, house_no, row_number)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`;
 
-    const insertErrSQL = `INSERT INTO trn_condo_qr_err
-      (datasource, original_project_name, complaint_topic, complaint_detail, room_no, status, consent, open_date, job_type, work_area, error_reason)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`;
+    const insertErrSQL = `INSERT INTO trn_complain_err
+      (datasource, original_project_name, category, complaint_topic, original_detail, house_no, row_number, error_reason)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`;
 
-    for (const stg of stgRows) {
-      const rawName = (stg.project_name || '').trim();
+    for (const stg of allRows) {
+      const ds = stg.src;
+      const rawName = (stg.project || '').trim();
       const result = findMaster(rawName);
       const master = result ? result.master : null;
       if (result) {
         matchMethods[result.method] = (matchMethods[result.method] || 0) + 1;
       }
 
-      // Parse timestamp_str → Date
-      const openDate = stg.timestamp_str ? new Date(stg.timestamp_str) : null;
-
-      // Map complaint_topic → job_type
-      const jobType = (stg.complaint_topic || '').toLowerCase() === 'repair' ? 'repair' : 'complain';
-      const detectedCategory = detectCategory(stg.complaint_detail, jobType);
-
       if (master) {
-        const values = [
-          'condo_qr',
+        await client.query(insertSQL, [
+          ds,
           master.project_id, master.project_name_th, master.project_type,
-          '', rawName,
-          openDate, null, null, null, null, null,
-          `cqr-${stg.id}`, '', '', stg.status || '',
-          '', '', '',
-          stg.room_no || '', '', '', '',
-          detectedCategory, stg.complaint_detail || '', '', stg.complaint_detail || '',
-          '', '', '',
-          '', 'condo_qr',
-          '', '', '', '',
-          '', '', '',
-          '', '', '',
-          '', '', '', '', '',
-          '', '',
-          jobType, 'common_area', false,
-          master ? (master.opm || '') : '',
-        ];
-        await client.query(insertSQL, values);
+          rawName, master.opm || '',
+          stg.category || '', stg.complaint_topic || '', stg.topic_summary || '',
+          stg.original_detail || '', stg.extracted_detail || '', stg.house_no || '', stg.row_number,
+        ]);
         insertedCount++;
+        sourceCount[ds] = (sourceCount[ds] || 0) + 1;
       } else {
         await client.query(insertErrSQL, [
-          'condo_qr', rawName, stg.complaint_topic || '', stg.complaint_detail || '',
-          stg.room_no || '', stg.status || '', stg.consent || '',
-          openDate, jobType, 'common_area',
+          ds, rawName,
+          stg.category || '', stg.complaint_topic || '',
+          stg.original_detail || '', stg.house_no || '', stg.row_number,
           `Project not found in master: "${rawName}"`,
         ]);
         errorCount++;
@@ -1407,9 +1409,10 @@ router.post('/etl/condo-qr', async (req, res, next) => {
     await client.query('COMMIT');
     res.json({
       success: true,
-      totalStg: stgRows.length,
+      totalStg: allRows.length,
       inserted: insertedCount,
       errors: errorCount,
+      sourceCount,
       matchMethods,
     });
   } catch (err) {
@@ -1418,6 +1421,66 @@ router.post('/etl/condo-qr', async (req, res, next) => {
   } finally {
     client.release();
   }
+});
+
+// ==================== Complaints ====================
+router.get('/complain', async (req, res, next) => {
+  try {
+    const { project_id, project_type, category, search, sort_by, sort_order, limit, offset } = req.query;
+
+    let where = [];
+    let params = [];
+    let idx = 1;
+
+    if (project_id) { where.push(`c.project_id = $${idx++}`); params.push(project_id); }
+    if (project_type) { where.push(`c.project_type = $${idx++}`); params.push(project_type); }
+    if (category) { where.push(`c.category = $${idx++}`); params.push(category); }
+    if (search) {
+      where.push(`(c.project_name ILIKE $${idx} OR c.original_project_name ILIKE $${idx} OR c.complaint_topic ILIKE $${idx} OR c.topic_summary ILIKE $${idx} OR c.extracted_detail ILIKE $${idx})`);
+      params.push(`%${search}%`);
+      idx++;
+    }
+
+    const whereClause = where.length > 0 ? 'WHERE ' + where.join(' AND ') : '';
+
+    // Summary by category
+    const summaryQ = await qualityPool.query(
+      `SELECT category, COUNT(*) AS count FROM trn_complain c ${whereClause} GROUP BY category ORDER BY count DESC`,
+      params
+    );
+
+    // Top projects
+    const topProjectsQ = await qualityPool.query(
+      `SELECT c.project_id, c.project_name, COUNT(*) AS count FROM trn_complain c ${whereClause} GROUP BY c.project_id, c.project_name ORDER BY count DESC`,
+      params
+    );
+
+    // Total count + distinct projects
+    const countQ = await qualityPool.query(`SELECT COUNT(*) AS total, COUNT(DISTINCT c.project_id) AS distinct_projects FROM trn_complain c ${whereClause}`, params);
+    const total = parseInt(countQ.rows[0].total);
+    const distinctProjects = parseInt(countQ.rows[0].distinct_projects);
+
+    // Sorting
+    const allowedSorts = { project_name: 'c.project_name', category: 'c.category', complaint_topic: 'c.complaint_topic', id: 'c.id' };
+    const sortCol = allowedSorts[sort_by] || 'c.id';
+    const order = sort_order === 'asc' ? 'ASC' : 'DESC';
+
+    // Records
+    const lim = parseInt(limit) || 50;
+    const off = parseInt(offset) || 0;
+    const dataQ = await qualityPool.query(
+      `SELECT c.* FROM trn_complain c ${whereClause} ORDER BY ${sortCol} ${order} LIMIT $${idx} OFFSET $${idx + 1}`,
+      [...params, lim, off]
+    );
+
+    res.json({
+      summary: summaryQ.rows,
+      topProjects: topProjectsQ.rows,
+      records: dataQ.rows,
+      distinctProjects,
+      pagination: { total, limit: lim, offset: off },
+    });
+  } catch (err) { next(err); }
 });
 
 // ==================== Data Quality ====================

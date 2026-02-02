@@ -31,7 +31,6 @@ router.get('/filters', asyncHandler(async (req, res) => {
         COALESCE(p.name_en, INITCAP(REPLACE(SPLIT_PART(s.name, '.', 1), '-', ' '))) as display_name
       FROM silverman.site s
       LEFT JOIN silverman.project p ON p.site_id = s.id
-      WHERE EXISTS (SELECT 1 FROM silverman.invoice i WHERE i.site_id = s.id LIMIT 1)
       ORDER BY s.name
     `),
     // Projects
@@ -77,7 +76,7 @@ router.get('/filters', asyncHandler(async (req, res) => {
 
 // ===== Dashboard Overview =====
 router.get('/overview', asyncHandler(async (req, res) => {
-  const { site_id, year, period, status, pay_group, project_type } = req.query;
+  const { site_id, year, period, status, pay_group, project_type, expense_type } = req.query;
 
   // Use year filter (default to current year)
   const targetYear = year || new Date().getFullYear().toString();
@@ -136,6 +135,11 @@ router.get('/overview', asyncHandler(async (req, res) => {
   } else if (project_type === 'lowrise') {
     projectTypeCondition = "site_id IN (SELECT site_id FROM silverman.project WHERE type_of_project IS NULL OR type_of_project != 'condominium')";
     conditions.push(projectTypeCondition);
+  }
+
+  // Expense type filter
+  if (expense_type) {
+    conditions.push(buildExpenseTypeCondition(expense_type));
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -234,6 +238,9 @@ router.get('/overview', asyncHandler(async (req, res) => {
       if (projectTypeCondition) {
         billedConditions.push(projectTypeCondition);
       }
+      if (expense_type) {
+        billedConditions.push(buildExpenseTypeCondition(expense_type));
+      }
 
       const billedWhereClause = `WHERE ${billedConditions.join(' AND ')}`;
 
@@ -278,6 +285,9 @@ router.get('/overview', asyncHandler(async (req, res) => {
       if (projectTypeCondition) {
         paidConditions.push(projectTypeCondition);
       }
+      if (expense_type) {
+        paidConditions.push(buildExpenseTypeCondition(expense_type));
+      }
 
       const paidWhereClause = paidConditions.length > 0 ? `WHERE ${paidConditions.join(' AND ')}` : '';
 
@@ -317,6 +327,9 @@ router.get('/overview', asyncHandler(async (req, res) => {
       if (projectTypeCondition) {
         outstandingConditions.push(projectTypeCondition);
       }
+      if (expense_type) {
+        outstandingConditions.push(buildExpenseTypeCondition(expense_type));
+      }
 
       const outstandingWhereClause = `WHERE ${outstandingConditions.join(' AND ')}`;
 
@@ -353,6 +366,9 @@ router.get('/overview', asyncHandler(async (req, res) => {
       }
       if (projectTypeCondition) {
         cumConditions.push(projectTypeCondition);
+      }
+      if (expense_type) {
+        cumConditions.push(buildExpenseTypeCondition(expense_type));
       }
 
       const cumWhereClause = `WHERE ${cumConditions.join(' AND ')}`;
@@ -556,7 +572,7 @@ router.get('/overview', asyncHandler(async (req, res) => {
 
 // ===== Collection (Detailed Invoice List with Summary) =====
 router.get('/collection', asyncHandler(async (req, res) => {
-  const { site_id, year, status, search, period, pay_group, project_type, limit = 50, offset = 0, sort_by = 'issued_date', sort_order = 'desc' } = req.query;
+  const { site_id, year, status, search, period, pay_group, project_type, expense_type, limit = 50, offset = 0, sort_by = 'issued_date', sort_order = 'desc' } = req.query;
 
   // Map sort fields to SQL columns
   const sortFieldMap = {
@@ -617,6 +633,11 @@ router.get('/collection', asyncHandler(async (req, res) => {
     conditions.push("i.site_id IN (SELECT site_id FROM silverman.project WHERE type_of_project IS NULL OR type_of_project != 'condominium')");
   }
 
+  // Expense type filter
+  if (expense_type) {
+    conditions.push(buildExpenseTypeCondition(expense_type, 'i'));
+  }
+
   if (search) {
     conditions.push(`(
       i.name ILIKE $${paramIndex} OR
@@ -649,6 +670,9 @@ router.get('/collection', asyncHandler(async (req, res) => {
     overdueBaseConditions.push("site_id IN (SELECT site_id FROM silverman.project WHERE type_of_project = 'condominium')");
   } else if (project_type === 'lowrise') {
     overdueBaseConditions.push("site_id IN (SELECT site_id FROM silverman.project WHERE type_of_project IS NULL OR type_of_project != 'condominium')");
+  }
+  if (expense_type) {
+    overdueBaseConditions.push(buildExpenseTypeCondition(expense_type));
   }
 
   // Add pagination params for data query
@@ -857,10 +881,9 @@ router.get('/invoice/:id/items', asyncHandler(async (req, res) => {
 // ===== Expense Summary by Type =====
 // Expense type mapping
 const EXPENSE_TYPES = [
-  { id: 'common_fee', name: 'ค่าส่วนกลาง', keywords: ['ส่วนกลาง'], exclude: ['ปรับปรุง'] },
+  { id: 'common_fee', name: 'ค่าส่วนกลาง', keywords: ['ส่วนกลาง', 'บริการสาธารณะ'], exclude: ['ปรับปรุง'] },
   { id: 'water', name: 'ค่าน้ำประปา', keywords: ['ค่าน้ำประปา'], exclude: [] },
   { id: 'water_meter', name: 'ค่ามิเตอร์น้ำ', keywords: ['มิเตอร์น้ำ'], exclude: [] },
-  { id: 'public_service', name: 'ค่าบริการสาธารณะ', keywords: ['บริการสาธารณะ'], exclude: [] },
   { id: 'insurance', name: 'ค่าเบี้ยประกัน', keywords: ['ประกันภัย'], exclude: [] },
   { id: 'parking', name: 'ค่าจอดรถ', keywords: ['จอดรถ', 'จอดจักรยานยนต์'], exclude: [] },
   { id: 'surcharge', name: 'เงินเพิ่ม', keywords: ['เงินเพิ่ม'], exclude: [] },
@@ -870,6 +893,13 @@ const EXPENSE_TYPES = [
   { id: 'electricity', name: 'ค่าไฟฟ้า', keywords: ['ไฟฟ้า', 'กระแสไฟ'], exclude: [] },
   { id: 'other', name: 'อื่นๆ', keywords: [], exclude: [] },
 ];
+
+// Build SQL condition to filter invoices by expense type (keyword match on transaction text)
+function buildExpenseTypeCondition(expenseTypeId, tableAlias = '') {
+  const prefix = tableAlias ? `${tableAlias}.` : '';
+  // Use materialized view for fast lookup (indexed by expense_type + invoice_id)
+  return `${prefix}id IN (SELECT invoice_id FROM silverman.invoice_expense_type WHERE expense_type = '${expenseTypeId}')`;
+}
 
 function categorizeExpense(description) {
   for (const type of EXPENSE_TYPES) {
@@ -962,7 +992,7 @@ router.get('/expense-summary', asyncHandler(async (req, res) => {
 
 // ===== Aging Report - Invoice Level =====
 router.get('/aging', asyncHandler(async (req, res) => {
-  const { site_id, year, bucket, search, limit = 50, offset = 0, sort_by = 'daysOverdue', sort_order = 'desc', pay_group, project_type } = req.query;
+  const { site_id, year, bucket, search, limit = 50, offset = 0, sort_by = 'daysOverdue', sort_order = 'desc', pay_group, project_type, expense_type } = req.query;
 
   // Map sort fields to SQL columns
   const sortFieldMap = {
@@ -1011,6 +1041,9 @@ router.get('/aging', asyncHandler(async (req, res) => {
   } else if (project_type === 'lowrise') {
     conditions.push("i.site_id IN (SELECT site_id FROM silverman.project WHERE type_of_project IS NULL OR type_of_project != 'condominium')");
   }
+  if (expense_type) {
+    conditions.push(buildExpenseTypeCondition(expense_type, 'i'));
+  }
 
   const whereClause = `WHERE ${conditions.join(' AND ')}`;
 
@@ -1042,6 +1075,9 @@ router.get('/aging', asyncHandler(async (req, res) => {
     summaryConditions.push("site_id IN (SELECT site_id FROM silverman.project WHERE type_of_project = 'condominium')");
   } else if (project_type === 'lowrise') {
     summaryConditions.push("site_id IN (SELECT site_id FROM silverman.project WHERE type_of_project IS NULL OR type_of_project != 'condominium')");
+  }
+  if (expense_type) {
+    summaryConditions.push(buildExpenseTypeCondition(expense_type));
   }
   // Note: don't include search in summary - we want overall totals
 
@@ -1186,7 +1222,7 @@ router.get('/aging', asyncHandler(async (req, res) => {
 
 // ===== Invoice Status Summary (Direct from invoice table) =====
 router.get('/invoice-summary', asyncHandler(async (req, res) => {
-  const { site_id, year, period, status, pay_group, project_type } = req.query;
+  const { site_id, year, period, status, pay_group, project_type, expense_type } = req.query;
 
   // Use year filter (default to current year)
   const targetYear = year || new Date().getFullYear().toString();
@@ -1230,6 +1266,9 @@ router.get('/invoice-summary', asyncHandler(async (req, res) => {
     conditions.push("site_id IN (SELECT site_id FROM silverman.project WHERE type_of_project = 'condominium')");
   } else if (project_type === 'lowrise') {
     conditions.push("site_id IN (SELECT site_id FROM silverman.project WHERE type_of_project IS NULL OR type_of_project != 'condominium')");
+  }
+  if (expense_type) {
+    conditions.push(buildExpenseTypeCondition(expense_type));
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -1292,6 +1331,9 @@ router.get('/invoice-summary', asyncHandler(async (req, res) => {
   } else if (project_type === 'lowrise') {
     cumConditions.push("site_id IN (SELECT site_id FROM silverman.project WHERE type_of_project IS NULL OR type_of_project != 'condominium')");
   }
+  if (expense_type) {
+    cumConditions.push(buildExpenseTypeCondition(expense_type));
+  }
 
   const cumWhereClause = cumConditions.length > 0 ? `WHERE ${cumConditions.join(' AND ')}` : '';
 
@@ -1348,7 +1390,7 @@ router.get('/invoice-summary', asyncHandler(async (req, res) => {
 
 // Collection summary by project (for comparison chart)
 router.get('/collection-by-project', asyncHandler(async (req, res) => {
-  const { year, pay_group, project_type } = req.query;
+  const { year, pay_group, project_type, site_id, expense_type } = req.query;
 
   // Use year filter (default to current year)
   const targetYear = parseInt(year) || new Date().getFullYear();
@@ -1372,6 +1414,14 @@ router.get('/collection-by-project', asyncHandler(async (req, res) => {
     baseConditions.push("p.type_of_project = 'condominium'");
   } else if (project_type === 'lowrise') {
     baseConditions.push("(p.type_of_project IS NULL OR p.type_of_project != 'condominium')");
+  }
+  if (site_id) {
+    baseConditions.push(`i.site_id = $${paramIndex}`);
+    params.push(site_id);
+    paramIndex++;
+  }
+  if (expense_type) {
+    baseConditions.push(buildExpenseTypeCondition(expense_type, 'i'));
   }
 
   // Build WHERE clause for main query (filter by selected year to get project list)
@@ -1404,6 +1454,14 @@ router.get('/collection-by-project', asyncHandler(async (req, res) => {
   // Get site IDs for yearly data query
   const siteIds = result.rows.map(r => r.site_id);
 
+  // Build additional conditions for yearly/cumulative queries (must match main query filters)
+  const yearlyExtraConds = [];
+  if (pay_group) yearlyExtraConds.push(`i.pay_group = '${pay_group.replace(/'/g, "''")}'`);
+  if (project_type === 'condo') yearlyExtraConds.push("i.site_id IN (SELECT site_id FROM silverman.project WHERE type_of_project = 'condominium')");
+  else if (project_type === 'lowrise') yearlyExtraConds.push("(i.site_id IN (SELECT site_id FROM silverman.project WHERE type_of_project IS NULL OR type_of_project != 'condominium'))");
+  if (expense_type) yearlyExtraConds.push(buildExpenseTypeCondition(expense_type, 'i'));
+  const yearlyExtraWhere = yearlyExtraConds.length > 0 ? ' AND ' + yearlyExtraConds.join(' AND ') : '';
+
   // Query yearly breakdown for all sites in one query (for all 3 years)
   let yearlyData = {};
   if (siteIds.length > 0) {
@@ -1418,6 +1476,7 @@ router.get('/collection-by-project', asyncHandler(async (req, res) => {
       WHERE i.site_id = ANY($1)
         AND EXTRACT(YEAR FROM i.issued_date) = ANY($2)
         AND i.status != 'void'
+        ${yearlyExtraWhere}
       GROUP BY i.site_id, EXTRACT(YEAR FROM i.issued_date)
     `, [siteIds, years]);
 
@@ -1442,12 +1501,13 @@ router.get('/collection-by-project', asyncHandler(async (req, res) => {
         i.site_id,
         COALESCE(SUM(i.total) FILTER (WHERE i.status != 'void'), 0) as total_amount,
         COALESCE(SUM(i.total) FILTER (WHERE i.status IN ('paid', 'partial_payment')), 0) as paid_amount,
-        COALESCE(SUM(i.total) FILTER (WHERE i.status = 'overdue'), 0) as overdue_amount
+        COALESCE(SUM(i.total) FILTER (WHERE i.status = 'overdue' AND EXTRACT(YEAR FROM i.due_date) <= $2), 0) as overdue_amount
       FROM silverman.invoice i
       WHERE i.site_id = ANY($1)
         AND i.status != 'void'
+        ${yearlyExtraWhere}
       GROUP BY i.site_id
-    `, [siteIds]);
+    `, [siteIds, targetYear]);
 
     cumResult.rows.forEach(row => {
       cumulativeData[row.site_id] = {
