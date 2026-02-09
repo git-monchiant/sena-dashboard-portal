@@ -98,6 +98,7 @@ export function CategoryByProjectPage() {
           projects={projects}
           hideProject={false}
           onApply={(filters) => setCurrentFilters(filters)}
+          hideFields={['category']}
         />
 
         {!data ? (

@@ -69,6 +69,7 @@ export function ProjectOverviewQualityPage() {
         <QualityFilters
           projects={projects}
           onApply={(filters) => setCurrentFilters(filters)}
+          hideFields={['category']}
         />
 
         {!data ? (

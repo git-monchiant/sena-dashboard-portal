@@ -80,7 +80,7 @@ export function ComplainPage() {
       <PageHeader title="Complaints" subtitle="ข้อร้องเรียนจากลูกค้าคอนโด (QR Survey)" />
 
       <div className="p-8 space-y-6">
-        <QualityFilters onApply={(f) => { setCurrentFilters(f); setCurrentPage(1); }} projects={projects} />
+        <QualityFilters onApply={(f) => { setCurrentFilters(f); setCurrentPage(1); }} projects={projects} hideFields={['category']} />
 
         {/* KPI Cards */}
         {data && (

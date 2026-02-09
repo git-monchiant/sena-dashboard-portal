@@ -240,6 +240,7 @@ export async function fetchExpenseSummary(
   if (filters.projectType) {
     params.set('project_type', filters.projectType);
   }
+  // Don't send expense_type to pie chart - it already shows breakdown by type
 
   const url = `/api/common-fee/expense-summary${params.toString() ? `?${params}` : ''}`;
   const response = await fetch(url);

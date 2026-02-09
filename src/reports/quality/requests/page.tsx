@@ -80,6 +80,7 @@ export function RequestsPage() {
       projectType: currentFilters.projectType || undefined,
       category: currentFilters.category || undefined,
       workArea: currentFilters.workArea || undefined,
+      warrantyStatus: currentFilters.warrantyStatus || undefined,
       dateFrom: currentFilters.dateFrom || undefined,
       dateTo: currentFilters.dateTo || undefined,
       jobFilter: jobFilter,
@@ -145,7 +146,7 @@ export function RequestsPage() {
             <span className="text-sm text-slate-500">{backLabel}</span>
           </div>
         )}
-        <QualityFilters onApply={handleApplyFilters} projects={projects} />
+        <QualityFilters onApply={handleApplyFilters} projects={projects} hideFields={['category']} />
 
         {/* Jobs Table */}
         {tableData && (

@@ -110,6 +110,7 @@ export interface QualityOverviewData {
   agingScatter: {
     open: { day: number; count: number }[];
     closed: { day: number; count: number }[];
+    cancelled: { day: number; count: number }[];
   };
   workAreaBreakdown: { workArea: string; total: number; openJobs: number; closedJobs: number }[];
   workAreaTrend: { month: string; [key: string]: string | number }[];
@@ -125,6 +126,7 @@ export async function fetchQualityOverview(
   if (filters.projectType) params.set('project_type', filters.projectType);
   if (filters.category) params.set('category', filters.category);
   if (filters.workArea) params.set('work_area', filters.workArea);
+  if (filters.warrantyStatus) params.set('warranty_status', filters.warrantyStatus);
   if (filters.dateFrom) params.set('date_from', filters.dateFrom);
   if (filters.dateTo) params.set('date_to', filters.dateTo);
 

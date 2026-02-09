@@ -187,7 +187,7 @@ export function QualityOverviewPage() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [categoryTrend, setCategoryTrend] = useState<CategoryTrendPoint[]>([]);
   const [categoryTrendLoading, setCategoryTrendLoading] = useState(false);
-  const [currentFilters, setCurrentFilters] = useState<QualityFilterState>({ projectId: '', projectType: '', category: '', workArea: '', dateFrom: '', dateTo: '' });
+  const [currentFilters, setCurrentFilters] = useState<QualityFilterState>({ projectId: '', projectType: '', category: '', workArea: '', warrantyStatus: '', dateFrom: '', dateTo: '' });
 
 
   const loadCategoryTrend = async (category: string, filters: QualityFilterState) => {
@@ -246,7 +246,7 @@ export function QualityOverviewPage() {
           subtitle="ระบบบริหารจัดการงานซ่อมและข้อร้องเรียนพื้นที่ส่วนกลาง"
         />
         <div className="p-8">
-          <QualityFilters onApply={handleApplyFilters} projects={projects} />
+          <QualityFilters onApply={handleApplyFilters} projects={projects} hideFields={['category']} />
           <div className="animate-pulse space-y-6">
             <div className="grid grid-cols-5 gap-6">
               {[1, 2, 3, 4, 5].map((i) => (
@@ -298,7 +298,7 @@ export function QualityOverviewPage() {
 
       <div className="p-8">
         {/* Filters */}
-        <QualityFilters onApply={handleApplyFilters} projects={projects} />
+        <QualityFilters onApply={handleApplyFilters} projects={projects} hideFields={['category']} />
 
         {/* KPI Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-8">

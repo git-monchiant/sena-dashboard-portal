@@ -43,6 +43,7 @@ export interface AgingFilters {
   projectType?: string;
   category?: string;
   workArea?: string;
+  warrantyStatus?: string;
   dateFrom?: string;
   dateTo?: string;
   jobFilter?: JobFilter;
@@ -106,6 +107,7 @@ export async function fetchAgingData(filters: AgingFilters = {}): Promise<AgingD
   if (filters.projectType) params.set('project_type', filters.projectType);
   if (filters.category) params.set('category', filters.category);
   if (filters.workArea) params.set('work_area', filters.workArea);
+  if (filters.warrantyStatus) params.set('warranty_status', filters.warrantyStatus);
   if (filters.dateFrom) params.set('date_from', filters.dateFrom);
   if (filters.dateTo) params.set('date_to', filters.dateTo);
   if (filters.jobFilter) params.set('job_filter', filters.jobFilter);

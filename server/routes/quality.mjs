@@ -235,7 +235,7 @@ function getCategoryGroup(rawCategory) {
 // GET /api/quality/overview
 router.get('/overview', async (req, res, next) => {
   try {
-    const { project_id, project_type, category, work_area, date_from, date_to } = req.query;
+    const { project_id, project_type, category, work_area, warranty_status, date_from, date_to } = req.query;
 
     // Build dynamic WHERE clause
     const conditions = [];
@@ -259,6 +259,10 @@ router.get('/overview', async (req, res, next) => {
     if (work_area) {
       conditions.push(`COALESCE(work_area, 'customer_room') = $${paramIdx++}`);
       params.push(work_area);
+    }
+    if (warranty_status) {
+      conditions.push(`warranty_status = $${paramIdx++}`);
+      params.push(warranty_status);
     }
     if (date_from) {
       // date_from is YYYY-MM, use first day of month
@@ -289,6 +293,10 @@ router.get('/overview', async (req, res, next) => {
       trendConditions.push(`COALESCE(work_area, 'customer_room') = $${trendParamIdx++}`);
       trendParams.push(work_area);
     }
+    if (warranty_status) {
+      trendConditions.push(`warranty_status = $${trendParamIdx++}`);
+      trendParams.push(warranty_status);
+    }
     if (category && CATEGORY_GROUP_MAP[category]) {
       const cats = CATEGORY_GROUP_MAP[category];
       const placeholders = cats.map(() => `$${trendParamIdx++}`);
@@ -315,6 +323,7 @@ router.get('/overview', async (req, res, next) => {
       monthlySlaResult,
       agingScatterOpenResult,
       agingScatterClosedResult,
+      agingScatterCancelledResult,
       workAreaResult,
       workAreaOpenedResult,
       workAreaClosedResult,
@@ -568,6 +577,21 @@ router.get('/overview', async (req, res, next) => {
                  COUNT(*) AS cnt
           FROM trn_repair
           ${whereClause ? whereClause + ' AND job_sub_status = \'completed\'' : 'WHERE job_sub_status = \'completed\''}
+          GROUP BY 1
+        ) sub
+        GROUP BY 1
+        ORDER BY 1
+      `, params),
+
+      // 16b. Aging scatter: cancelled jobs by age (days)
+      qualityPool.query(`
+        SELECT GREATEST(age_days, 0) AS age_days, SUM(cnt)::int AS cnt FROM (
+          SELECT FLOOR(EXTRACT(EPOCH FROM (
+            COALESCE(close_date, service_date, assessment_date, assign_date, open_date) - open_date
+          )) / 86400)::int AS age_days,
+                 COUNT(*) AS cnt
+          FROM trn_repair
+          ${whereClause ? whereClause + ' AND job_sub_status = \'cancel\'' : 'WHERE job_sub_status = \'cancel\''}
           GROUP BY 1
         ) sub
         GROUP BY 1
@@ -926,6 +950,7 @@ router.get('/overview', async (req, res, next) => {
       agingScatter: {
         open: agingScatterOpenResult.rows.map(r => ({ day: parseInt(r.age_days), count: parseInt(r.cnt) })),
         closed: agingScatterClosedResult.rows.map(r => ({ day: parseInt(r.age_days), count: parseInt(r.cnt) })),
+        cancelled: agingScatterCancelledResult.rows.map(r => ({ day: parseInt(r.age_days), count: parseInt(r.cnt) })),
       },
       workAreaBreakdown: workAreaResult.rows.map(r => ({
         workArea: r.work_area,
@@ -1740,7 +1765,7 @@ router.get('/job/:id', async (req, res, next) => {
 // GET /api/quality/aging - long pending jobs list with sort/search/pagination/bucket filter
 router.get('/aging', async (req, res, next) => {
   try {
-    const { project_id, project_type, category, work_area, date_from, date_to, job_filter, courtesy_only, bucket, search, sort_by, sort_order, limit, offset } = req.query;
+    const { project_id, project_type, category, work_area, warranty_status, date_from, date_to, job_filter, courtesy_only, bucket, search, sort_by, sort_order, limit, offset } = req.query;
 
     const conditions = [];
     const params = [];
@@ -1770,6 +1795,7 @@ router.get('/aging', async (req, res, next) => {
       params.push(...cats);
     }
     if (work_area) { conditions.push(`COALESCE(work_area, 'customer_room') = $${paramIdx++}`); params.push(work_area); }
+    if (warranty_status) { conditions.push(`warranty_status = $${paramIdx++}`); params.push(warranty_status); }
     if (date_from) { conditions.push(`open_date >= $${paramIdx++}`); params.push(date_from.length <= 7 ? `${date_from}-01` : date_from); }
     if (date_to) {
       // Convert YYYY-MM to last day of that month

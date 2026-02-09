@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Clock, TrendingUp, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Wrench, CheckCircle, X, AlertTriangle, Star, Phone, Mail, Image, ArrowLeft } from 'lucide-react';
+import { Clock, TrendingUp, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Wrench, CheckCircle, XCircle, X, AlertTriangle, Star, Phone, Mail, Image, ArrowLeft } from 'lucide-react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, Cell, PieChart, Pie, LabelList,
@@ -87,6 +87,7 @@ export function AgingPage() {
       projectType: currentFilters.projectType || undefined,
       category: currentFilters.category || undefined,
       workArea: currentFilters.workArea || undefined,
+      warrantyStatus: currentFilters.warrantyStatus || undefined,
       dateFrom: currentFilters.dateFrom || undefined,
       dateTo: currentFilters.dateTo || undefined,
       jobFilter: jobFilter,
@@ -151,16 +152,19 @@ export function AgingPage() {
             <span className="text-sm text-slate-500">{backLabel}</span>
           </div>
         )}
-        <QualityFilters onApply={handleApplyFilters} projects={projects} />
+        <QualityFilters onApply={handleApplyFilters} projects={projects} hideFields={['category']} />
 
         {/* Overview KPI Cards */}
         {overviewData && (
-        <div className="grid grid-cols-5 gap-4">
+        <div className="grid grid-cols-6 gap-4">
           <div onClick={() => { setJobFilter(jobFilter === 'all' ? 'open' : 'all'); setBucketFilter('all'); setCurrentPage(1); setShowAll(true); }} className={`cursor-pointer transition-all hover:opacity-80 rounded-xl ${jobFilter === 'all' ? 'ring-2 ring-offset-1 ring-blue-400' : ''}`}>
             <KPICard title="งานทั้งหมด" value={overviewData.kpis.totalJobs.toLocaleString()} change={`${overviewData.kpis.distinctProjects?.toLocaleString() ?? 0} โครงการ`} showArrow={false} subtext={`${overviewData.kpis.distinctUnits?.toLocaleString() ?? 0} ยูนิต`} icon={Wrench} color="blue" />
           </div>
           <div onClick={() => { setJobFilter(jobFilter === 'closed' ? 'open' : 'closed'); setBucketFilter('all'); setCurrentPage(1); setShowAll(true); }} className={`cursor-pointer transition-all hover:opacity-80 rounded-xl ${jobFilter === 'closed' ? 'ring-2 ring-offset-1 ring-emerald-400' : ''}`}>
-            <KPICard title="งานปิดแล้ว" value={(overviewData.kpis.totalJobs - overviewData.kpis.openJobs).toLocaleString()} change={`${(overviewData.kpis.totalJobs > 0 ? (((overviewData.kpis.totalJobs - overviewData.kpis.openJobs) / overviewData.kpis.totalJobs) * 100).toFixed(1) : 0)}%`} showArrow={false} subtext={`${overviewData.kpis.closedUnits?.toLocaleString() ?? 0} ยูนิต`} icon={CheckCircle} color="emerald" />
+            <KPICard title="เสร็จสิ้น" value={(overviewData.kpis.totalJobs - overviewData.kpis.openJobs - (overviewData.kpis.cancelledJobs || 0)).toLocaleString()} change={`${(overviewData.kpis.totalJobs > 0 ? (((overviewData.kpis.totalJobs - overviewData.kpis.openJobs - (overviewData.kpis.cancelledJobs || 0)) / overviewData.kpis.totalJobs) * 100).toFixed(1) : 0)}%`} showArrow={false} subtext={`${overviewData.kpis.closedUnits?.toLocaleString() ?? 0} ยูนิต`} icon={CheckCircle} color="emerald" />
+          </div>
+          <div onClick={() => { setJobFilter(jobFilter === 'cancelled' ? 'open' : 'cancelled'); setBucketFilter('all'); setCurrentPage(1); setShowAll(true); }} className={`cursor-pointer transition-all hover:opacity-80 rounded-xl ${jobFilter === 'cancelled' ? 'ring-2 ring-offset-1 ring-red-400' : ''}`}>
+            <KPICard title="ยกเลิก" value={(overviewData.kpis.cancelledJobs || 0).toLocaleString()} change={`${(overviewData.kpis.totalJobs > 0 ? (((overviewData.kpis.cancelledJobs || 0) / overviewData.kpis.totalJobs) * 100).toFixed(1) : 0)}%`} showArrow={false} subtext={`${(overviewData.kpis.cancelledUnits || 0).toLocaleString()} ยูนิต`} icon={XCircle} color="red" />
           </div>
           {/* กำลังดำเนินการ + SLA breakdown */}
           <div className="col-span-3 card">
@@ -232,11 +236,19 @@ export function AgingPage() {
             return b;
           };
           const closedB = aggregate(overviewData.agingScatter.closed);
+          const cancelledB = aggregate(overviewData.agingScatter.cancelled || []);
           const openB = aggregate(overviewData.agingScatter.open);
           const closedTotal = Object.values(closedB).reduce((a, b) => a + b, 0);
+          const cancelledTotal = Object.values(cancelledB).reduce((a, b) => a + b, 0);
+          const closedAndCancelledTotal = closedTotal + cancelledTotal;
           const openTotal = Object.values(openB).reduce((a, b) => a + b, 0);
 
-          const closedBarData = closedBuckets.map((s) => ({ label: s.label, value: closedB[s.key as keyof typeof closedB], color: s.color, pct: closedTotal > 0 ? ((closedB[s.key as keyof typeof closedB] / closedTotal) * 100).toFixed(1) : '0' }));
+          const closedStackData = closedBuckets.map((s) => {
+            const k = s.key as keyof typeof closedB;
+            const completed = closedB[k];
+            const cancelled = cancelledB[k];
+            return { label: s.label, completed, cancelled, total: completed + cancelled };
+          });
           const openBarData = openBuckets.map((s) => ({ label: s.label, value: openB[s.key as keyof typeof openB], color: s.color, pct: openTotal > 0 ? ((openB[s.key as keyof typeof openB] / openTotal) * 100).toFixed(1) : '0' }));
 
           const renderBar = (barData: typeof closedBarData) => (
@@ -286,9 +298,35 @@ export function AgingPage() {
           <div className="card">
             <div className="flex items-center gap-2 mb-4">
               <CheckCircle className="w-5 h-5 text-emerald-500" />
-              <h3 className="font-semibold text-slate-800">งานปิดแล้ว ({closedTotal.toLocaleString()})</h3>
+              <h3 className="font-semibold text-slate-800">งานปิดแล้ว ({closedAndCancelledTotal.toLocaleString()})</h3>
             </div>
-            {renderBar(closedBarData)}
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={closedStackData} margin={{ top: 30, right: 10, left: 10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="label" stroke="#64748b" fontSize={12} />
+                <YAxis stroke="#64748b" fontSize={12} tickFormatter={(v: number) => v.toLocaleString()} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
+                  formatter={(value: any, name: string) => [`${Number(value).toLocaleString()} งาน`, name === 'completed' ? 'เสร็จสิ้น' : 'ยกเลิก']}
+                />
+                <Bar dataKey="completed" stackId="closed" fill="#22c55e" radius={[0, 0, 0, 0]} name="เสร็จสิ้น" />
+                <Bar dataKey="cancelled" stackId="closed" fill="#ef4444" radius={[4, 4, 0, 0]} name="ยกเลิก">
+                  <LabelList
+                    dataKey="total"
+                    position="top"
+                    fontSize={10}
+                    fill="#64748b"
+                    formatter={(v: number) => v > 0 ? v.toLocaleString() : ''}
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+            {cancelledTotal > 0 && (
+              <div className="flex items-center justify-center gap-4 mt-2 text-xs text-slate-500">
+                <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-emerald-500" /> เสร็จสิ้น ({closedTotal.toLocaleString()})</span>
+                <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-red-500" /> ยกเลิก ({cancelledTotal.toLocaleString()})</span>
+              </div>
+            )}
           </div>
           <div className="card">
             <div className="flex items-center gap-2 mb-4">

@@ -345,53 +345,62 @@ export function CommonFeeOverviewPage() {
         {invoiceSummary && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
           {/* ทั้งหมด */}
-          <div className="card text-left">
+          <Link to="/reports/common-fee" className="card text-left hover:ring-2 hover:ring-slate-300 transition-all cursor-pointer block">
             <div className="flex items-start justify-between mb-2">
               <div className="w-8 h-8 bg-slate-100 text-slate-600 rounded-lg flex items-center justify-center">
                 <FileText className="w-4 h-4" />
               </div>
-              <span className="text-xs font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full">100%</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full">100%</span>
+                <ArrowRight className="w-4 h-4 text-slate-400" />
+              </div>
             </div>
             <p className="text-xl font-bold text-slate-800 text-left">
               ฿{invoiceSummary.total.amount.toLocaleString('en-US', { maximumFractionDigits: 0 })}
             </p>
             <p className="text-xs text-slate-400 mb-1 text-left">{invoiceSummary.total.unitCount.toLocaleString()} ยูนิต ({invoiceSummary.total.count.toLocaleString()} inv)</p>
             <p className="text-xs text-slate-500 font-medium text-left">ทั้งหมด</p>
-          </div>
+          </Link>
 
           {/* ชำระแล้ว */}
-          <div className="card text-left">
+          <Link to="/reports/common-fee" className="card text-left hover:ring-2 hover:ring-emerald-300 transition-all cursor-pointer block">
             <div className="flex items-start justify-between mb-2">
               <div className="w-8 h-8 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center">
                 <CheckCircle className="w-4 h-4" />
               </div>
-              <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">
-                {invoiceSummary.total.amount > 0 ? (invoiceSummary.paid.amount / invoiceSummary.total.amount * 100).toFixed(0) : 0}%
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">
+                  {invoiceSummary.total.amount > 0 ? (invoiceSummary.paid.amount / invoiceSummary.total.amount * 100).toFixed(0) : 0}%
+                </span>
+                <ArrowRight className="w-4 h-4 text-emerald-400" />
+              </div>
             </div>
             <p className="text-xl font-bold text-emerald-600 text-left">
               ฿{invoiceSummary.paid.amount.toLocaleString('en-US', { maximumFractionDigits: 0 })}
             </p>
             <p className="text-xs text-emerald-500 mb-1 text-left">{invoiceSummary.paid.unitCount.toLocaleString()} ยูนิต ({invoiceSummary.paid.count.toLocaleString()} inv)</p>
             <p className="text-xs text-slate-500 font-medium text-left">ชำระแล้ว (paid)</p>
-          </div>
+          </Link>
 
           {/* ชำระบางส่วน */}
-          <div className="card text-left">
+          <Link to="/reports/common-fee" className="card text-left hover:ring-2 hover:ring-blue-300 transition-all cursor-pointer block">
             <div className="flex items-start justify-between mb-2">
               <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center">
                 <Clock className="w-4 h-4" />
               </div>
-              <span className="text-xs font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">
-                {invoiceSummary.total.amount > 0 ? (invoiceSummary.partial.amount / invoiceSummary.total.amount * 100).toFixed(0) : 0}%
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">
+                  {invoiceSummary.total.amount > 0 ? (invoiceSummary.partial.amount / invoiceSummary.total.amount * 100).toFixed(0) : 0}%
+                </span>
+                <ArrowRight className="w-4 h-4 text-blue-400" />
+              </div>
             </div>
             <p className="text-xl font-bold text-blue-600 text-left">
               ฿{invoiceSummary.partial.amount.toLocaleString('en-US', { maximumFractionDigits: 0 })}
             </p>
             <p className="text-xs text-blue-500 mb-1 text-left">{invoiceSummary.partial.unitCount.toLocaleString()} ยูนิต ({invoiceSummary.partial.count.toLocaleString()} inv)</p>
             <p className="text-xs text-slate-500 font-medium text-left">ชำระบางส่วน (partial_payment)</p>
-          </div>
+          </Link>
 
           {/* ค้างในรอบ */}
           <Link to="/reports/common-fee/aging" className="card text-left hover:ring-2 hover:ring-orange-300 transition-all cursor-pointer block">
@@ -538,13 +547,14 @@ export function CommonFeeOverviewPage() {
                     data={expenseSummary?.data?.slice(0, 8) || []}
                     cx="50%"
                     cy="50%"
-                    innerRadius={40}
-                    outerRadius={80}
+                    innerRadius={50}
+                    outerRadius={95}
                     paddingAngle={2}
                     dataKey="amount"
                     nameKey="name"
-                    label={({ name, percent }) => `${name.length > 6 ? name.slice(0, 6) + '..' : name} ${(percent * 100).toFixed(0)}%`}
-                    labelLine={false}
+                    label={({ name, percent }) => percent >= 0.02 ? `${name} ${(percent * 100).toFixed(0)}%` : ''}
+                    labelLine={true}
+                    style={{ fontSize: '11px' }}
                   >
                     {(expenseSummary?.data?.slice(0, 8) || []).map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={EXPENSE_COLORS[index % EXPENSE_COLORS.length]} />
