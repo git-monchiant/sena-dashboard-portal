@@ -5,13 +5,13 @@ import path from 'path'
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 3000,
-    strictPort: true, // Fail if port 3000 is not available
+    port: 4000,
+    strictPort: true, // Fail if port 4000 is not available
     host: true,
     allowedHosts: true, // Allow all hosts for Cloudflare tunnel
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: 'http://localhost:4001',
         changeOrigin: true,
       },
     },

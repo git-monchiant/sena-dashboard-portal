@@ -27,10 +27,16 @@ const pools = {};
  */
 export function getPool(database = 'RPT2025') {
   if (!pools[database]) {
-    pools[database] = new Pool({
+    const p = new Pool({
       ...baseConfig,
       database,
+      idleTimeoutMillis: 30000,
     });
+    // Prevent unhandled pool errors (e.g. ETIMEDOUT) from crashing the process
+    p.on('error', (err) => {
+      console.error(`⚠️ Pool [${database}] idle client error (non-fatal):`, err.message);
+    });
+    pools[database] = p;
     console.log(`📦 Created pool for database: ${database}`);
   }
   return pools[database];

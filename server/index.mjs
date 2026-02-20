@@ -48,7 +48,7 @@ app.use((req, res) => {
 });
 
 // Server startup
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 4001;
 
 async function startServer() {
   // Test database connection
